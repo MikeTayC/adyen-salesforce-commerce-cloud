@@ -23,11 +23,25 @@ module.exports = function (api) {
                     ],
 
                     plugins: [
+                        "@babel/plugin-transform-block-scoping",
                         path.resolve(
                             __dirname,
                             'babel-plugins',
                             'transform-readable-optional-chaining.js'
-                        )
+                        ),
+                        [
+                            '@babel/plugin-transform-object-rest-spread',
+                            {
+                                loose: true,
+                                useBuiltIns: true
+                            }
+                        ],
+                        [
+                            '@babel/plugin-transform-spread',
+                            {
+                                loose: true
+                            }
+                        ]
                     ]
                 },
                 {

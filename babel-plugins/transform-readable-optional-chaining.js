@@ -51,87 +51,18 @@ module.exports = function transformReadableOptionalChaining({ types: t }) {
             }
         });
     }
-    /**
-     * Flatten:
-     *
-     *     paymentInstrument?.paymentTransaction?.amount
-     *
-     * into:
-     *
-     *     base: paymentInstrument
-     *
-     *     members:
-     *       paymentTransaction
-     *       amount
-     */
-    function flattenChain(node) {
-        const members = [];
-        let current = node;
-
-        while (
-            t.isOptionalMemberExpression(current) ||
-            t.isMemberExpression(current)
-        ) {
-            members.unshift({
-                property: clone(current.property),
-                computed: current.computed,
-                optional: Boolean(current.optional)
-            });
-
-            current = current.object;
-        }
-
-        return {
-            base: clone(current),
-            members
-        };
-    }
 
     /**
-     * Converts:
+     * Determines whether the parent continues the current member or
+     * function-call chain.
      *
-     *     foo?.bar?.baz
+     * For example:
      *
-     * into:
+     *     currentBasket?.getTotalGrossPrice().isAvailable()
      *
-     *     foo && foo.bar && foo.bar.baz
+     * must be transformed as one complete expression.
      */
-    function buildMemberChain(node) {
-        const { base, members } = flattenChain(node);
-
-        let current = clone(base);
-        let result = null;
-
-        members.forEach((member) => {
-            if (member.optional) {
-                result = result
-                    ? t.logicalExpression(
-                        '&&',
-                        result,
-                        clone(current)
-                    )
-                    : clone(current);
-            }
-
-            current = t.memberExpression(
-                clone(current),
-                clone(member.property),
-                member.computed
-            );
-        });
-
-        if (!result) {
-            return current;
-        }
-
-        return t.logicalExpression(
-            '&&',
-            result,
-            current
-        );
-    }
-
-    function isPartOfLargerChain(path) {
+    function parentContinuesChain(path) {
         const parent = path.parentPath;
 
         if (!parent) {
@@ -149,13 +80,264 @@ module.exports = function transformReadableOptionalChaining({ types: t }) {
         }
 
         if (
-            parent.isOptionalCallExpression() &&
+            (
+                parent.isOptionalCallExpression() ||
+                parent.isCallExpression()
+            ) &&
             parent.node.callee === path.node
         ) {
             return true;
         }
 
         return false;
+    }
+
+    /**
+     * Finds the outermost member or call expression belonging to the
+     * optional chain.
+     */
+    function getOutermostChainPath(path) {
+        let current = path;
+
+        while (parentContinuesChain(current)) {
+            current = current.parentPath;
+        }
+
+        return current;
+    }
+
+        /**
+     * Determines whether the optional-chain base is already checked by
+     * an enclosing if statement.
+     *
+     * This supports nested blocks and callback functions, for example:
+     *
+     *     if (items) {
+     *         Transaction.wrap(() => {
+     *             items?.forEach(callback);
+     *         });
+     *     }
+     */
+    function isGuardedByEnclosingIf(path, base) {
+        let currentPath = path;
+
+        while (currentPath.parentPath) {
+            const parentPath = currentPath.parentPath;
+
+            if (
+                parentPath.isIfStatement() &&
+                parentPath.node.consequent === currentPath.node &&
+                t.isNodesEquivalent(
+                    parentPath.node.test,
+                    base
+                )
+            ) {
+                return true;
+            }
+
+            currentPath = parentPath;
+        }
+
+        return false;
+    }
+
+    /**
+     * Flattens a complete member/call chain into:
+     *
+     * {
+     *     base,
+     *     operations
+     * }
+     *
+     * Example:
+     *
+     *     currentBasket?.getTotalGrossPrice().isAvailable()
+     *
+     * becomes:
+     *
+     *     base: currentBasket
+     *
+     *     operations:
+     *       optional member getTotalGrossPrice
+     *       normal call
+     *       normal member isAvailable
+     *       normal call
+     */
+    function flattenChain(node) {
+        if (
+            t.isOptionalMemberExpression(node) ||
+            t.isMemberExpression(node)
+        ) {
+            const chain = flattenChain(node.object);
+
+            chain.operations.push({
+                type: 'member',
+                property: clone(node.property),
+                computed: Boolean(node.computed),
+                optional: Boolean(node.optional)
+            });
+
+            return chain;
+        }
+
+        if (
+            t.isOptionalCallExpression(node) ||
+            t.isCallExpression(node)
+        ) {
+            const chain = flattenChain(node.callee);
+
+            chain.operations.push({
+                type: 'call',
+                arguments: node.arguments.map(clone),
+                optional: Boolean(node.optional)
+            });
+
+            return chain;
+        }
+
+        return {
+            base: clone(node),
+            operations: []
+        };
+    }
+
+    /**
+     * Applies one member or call operation to the current expression.
+     */
+    function applyOperation(current, operation) {
+        if (operation.type === 'member') {
+            return t.memberExpression(
+                clone(current),
+                clone(operation.property),
+                operation.computed
+            );
+        }
+
+        if (operation.type === 'call') {
+            return t.callExpression(
+                clone(current),
+                operation.arguments.map(clone)
+            );
+        }
+
+        throw new Error(
+            `Unsupported optional-chain operation: ${operation.type}`
+        );
+    }
+
+        /**
+     * Converts a complete optional chain into an && expression.
+     *
+     * Example:
+     *
+     *     paymentInstrument?.paymentTransaction?.amount
+     *
+     * becomes:
+     *
+     *     paymentInstrument &&
+     *     paymentInstrument.paymentTransaction &&
+     *     paymentInstrument.paymentTransaction.amount
+     *
+     * Example:
+     *
+     *     currentBasket?.getTotalGrossPrice().isAvailable()
+     *
+     * becomes:
+     *
+     *     currentBasket &&
+     *     currentBasket.getTotalGrossPrice().isAvailable()
+     */
+    function buildLogicalChain(path, node) {
+        const { base, operations } = flattenChain(node);
+
+        let current = clone(base);
+        const expressions = [];
+
+        operations.forEach((operation) => {
+            if (operation.optional) {
+                expressions.push(clone(current));
+            }
+
+            current = applyOperation(
+                current,
+                operation
+            );
+        });
+
+        if (expressions.length === 0) {
+            return current;
+        }
+
+        if (
+            expressions.length === 1 &&
+            isGuardedByEnclosingIf(path, base)
+        ) {
+            return current;
+        }
+
+        expressions.push(current);
+
+        return expressions.reduce((result, expression) => {
+            if (!result) {
+                return clone(expression);
+            }
+
+            return t.logicalExpression(
+                '&&',
+                result,
+                clone(expression)
+            );
+        }, null);
+    }
+
+      /**
+     * Replaces the complete chain containing the supplied optional node.
+     */
+    function transformChain(path) {
+        const outermostPath = getOutermostChainPath(path);
+        const replacement = buildLogicalChain(
+            outermostPath,
+            outermostPath.node
+        );
+
+        t.inheritsComments(
+            replacement,
+            outermostPath.node
+        );
+
+        outermostPath.replaceWith(replacement);
+
+    }
+
+    /**
+     * Changes concise arrow functions returning ternaries into an
+     * explicit block and return statement.
+     *
+     * Example:
+     *
+     *     const getAmount = () =>
+     *         condition ? first : second;
+     *
+     * becomes:
+     *
+     *     const getAmount = () => {
+     *         return condition ? first : second;
+     *     };
+     */
+    function addBlockToConditionalArrow(path) {
+        if (t.isBlockStatement(path.node.body)) {
+            return;
+        }
+
+        if (!t.isConditionalExpression(path.node.body)) {
+            return;
+        }
+
+        path.node.body = t.blockStatement([
+            t.returnStatement(
+                clone(path.node.body)
+            )
+        ]);
     }
 
     return {
@@ -175,71 +357,22 @@ module.exports = function transformReadableOptionalChaining({ types: t }) {
                     removeAdyenHeaders(path);
                 }
             },
-            OptionalCallExpression: {
-                exit(path) {
-                    /*
-                     * Handles:
-                     *
-                     *     foo?.bar()
-                     *
-                     * but NOT:
-                     *
-                     *     foo.bar?.()
-                     *     foo?.()
-                     */
-                    if (path.node.optional) {
-                        throw path.buildCodeFrameError(
-                            'Optional call operator ?.() is not supported.'
-                        );
-                    }
 
-                    const callee = path.node.callee;
-
-                    if (
-                        !t.isOptionalMemberExpression(callee) &&
-                        !t.isMemberExpression(callee)
-                    ) {
-                        return;
-                    }
-
-                    const transformedCallee =
-                        buildMemberChain(callee);
-
-                    /*
-                     * buildMemberChain(foo?.bar) gives:
-                     *
-                     *     foo && foo.bar
-                     *
-                     * We need:
-                     *
-                     *     foo && foo.bar()
-                     */
-                    if (!t.isLogicalExpression(transformedCallee)) {
-                        return;
-                    }
-
-                    const replacement = t.logicalExpression(
-                        '&&',
-                        transformedCallee.left,
-                        t.callExpression(
-                            transformedCallee.right,
-                            path.node.arguments.map(clone)
-                        )
-                    );
-
-                    path.replaceWith(replacement);
+            OptionalMemberExpression: {
+                enter(path) {
+                    transformChain(path);
                 }
             },
 
-            OptionalMemberExpression: {
-                exit(path) {
-                    if (isPartOfLargerChain(path)) {
-                        return;
-                    }
+            OptionalCallExpression: {
+                enter(path) {
+                    transformChain(path);
+                }
+            },
 
-                    path.replaceWith(
-                        buildMemberChain(path.node)
-                    );
+            ArrowFunctionExpression: {
+                exit(path) {
+                    addBlockToConditionalArrow(path);
                 }
             }
         }

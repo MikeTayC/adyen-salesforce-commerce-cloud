@@ -5,7 +5,6 @@ module.exports = function transformReadableOptionalChaining({ types: t }) {
         return t.cloneNode(node, true);
     }
 
-
     function removeAdyenHeader(comments) {
         if (!comments) {
             return comments;
@@ -32,26 +31,26 @@ module.exports = function transformReadableOptionalChaining({ types: t }) {
 
         path.traverse({
             enter(childPath) {
-            if (childPath.node.leadingComments) {
-                childPath.node.leadingComments = removeAdyenHeader(
-                    childPath.node.leadingComments
-                );
-            }
+                if (childPath.node.leadingComments) {
+                    childPath.node.leadingComments = removeAdyenHeader(
+                        childPath.node.leadingComments
+                    );
+                }
 
-            if (childPath.node.innerComments) {
-                childPath.node.innerComments = removeAdyenHeader(
-                    childPath.node.innerComments
-                );
-            }
+                if (childPath.node.innerComments) {
+                    childPath.node.innerComments = removeAdyenHeader(
+                        childPath.node.innerComments
+                    );
+                }
 
-            if (childPath.node.trailingComments) {
-                childPath.node.trailingComments = removeAdyenHeader(
-                    childPath.node.trailingComments
-                );
+                if (childPath.node.trailingComments) {
+                    childPath.node.trailingComments = removeAdyenHeader(
+                        childPath.node.trailingComments
+                    );
+                }
             }
-        }
-    });
-}
+        });
+    }
     /**
      * Flatten:
      *

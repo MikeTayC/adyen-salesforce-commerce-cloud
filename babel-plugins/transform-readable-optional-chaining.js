@@ -6,6 +6,140 @@ module.exports = function transformReadableOptionalChaining({ types: t }) {
     }
 
     /**
+     * Converts an SFCC collection for...of loop into an iterator loop.
+     *
+     * Example:
+     *
+     *     for (var item of collection.toArray()) {
+     *         process(item);
+     *     }
+     *
+     * becomes:
+     *
+     *     var itemIterator = collection.iterator();
+     *
+     *     while (itemIterator.hasNext()) {
+     *         var item = itemIterator.next();
+     *         process(item);
+     *     }
+     */
+    function transformForOfToIterator(path) {
+        const left = path.node.left;
+        const right = path.node.right;
+
+        if (
+            !t.isVariableDeclaration(left) ||
+            left.declarations.length !== 1
+        ) {
+            throw path.buildCodeFrameError(
+                'Readable for...of transform requires a single ' +
+                'variable declaration.'
+            );
+        }
+
+        const itemDeclaration = left.declarations[0];
+
+        if (!t.isIdentifier(itemDeclaration.id)) {
+            throw path.buildCodeFrameError(
+                'Readable for...of transform requires an ' +
+                'identifier loop variable.'
+            );
+        }
+
+        if (
+            !t.isCallExpression(right) ||
+            !t.isMemberExpression(right.callee) ||
+            right.callee.computed ||
+            !t.isIdentifier(
+                right.callee.property,
+                {
+                    name: 'toArray'
+                }
+            )
+        ) {
+            throw path.buildCodeFrameError(
+                'Readable for...of transform only supports ' +
+                'SFCC collections ending in .toArray().'
+            );
+        }
+
+        const itemIdentifier = clone(
+            itemDeclaration.id
+        );
+
+        const iteratorIdentifier =
+            path.scope.generateUidIdentifier(
+                `${itemIdentifier.name}Iterator`
+            );
+
+        const iteratorDeclaration = t.variableDeclaration(
+            'var',
+            [
+                t.variableDeclarator(
+                    clone(iteratorIdentifier),
+                    t.callExpression(
+                        t.memberExpression(
+                            clone(right.callee.object),
+                            t.identifier('iterator')
+                        ),
+                        []
+                    )
+                )
+            ]
+        );
+
+        const currentItemDeclaration =
+            t.variableDeclaration(
+                'var',
+                [
+                    t.variableDeclarator(
+                        clone(itemIdentifier),
+                        t.callExpression(
+                            t.memberExpression(
+                                clone(iteratorIdentifier),
+                                t.identifier('next')
+                            ),
+                            []
+                        )
+                    )
+                ]
+            );
+
+        const originalBody = t.isBlockStatement(
+            path.node.body
+        )
+            ? clone(path.node.body)
+            : t.blockStatement([
+                clone(path.node.body)
+            ]);
+
+        originalBody.body.unshift(
+            currentItemDeclaration
+        );
+
+        const whileStatement = t.whileStatement(
+            t.callExpression(
+                t.memberExpression(
+                    clone(iteratorIdentifier),
+                    t.identifier('hasNext')
+                ),
+                []
+            ),
+            originalBody
+        );
+
+        t.inheritsComments(
+            iteratorDeclaration,
+            path.node
+        );
+
+        path.replaceWithMultiple([
+            iteratorDeclaration,
+            whileStatement
+        ]);
+    }
+
+    /**
      * Returns true when a parameter default can be removed without
      * adding an initialization statement.
      *
@@ -711,6 +845,12 @@ module.exports = function transformReadableOptionalChaining({ types: t }) {
             Function: {
                 enter(path) {
                     transformDefaultParameters(path);
+                }
+            },
+
+            ForOfStatement: {
+                exit(path) {
+                    transformForOfToIterator(path);
                 }
             }
         }

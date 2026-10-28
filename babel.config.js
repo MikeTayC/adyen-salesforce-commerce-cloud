@@ -23,17 +23,24 @@ module.exports = function (api) {
                     ],
 
                     plugins: [
-                        [
-                            "@babel/plugin-proposal-decorators",
-                            {
-                                legacy: true
-                            }
-                        ],
                         path.resolve(
                             __dirname,
                             'babel-plugins',
                             'transform-readable-optional-chaining.js'
                         )
+                    ]
+                },
+                {
+                    test: /app_adyen_SFRA[\\/]cartridge[\\/]config[\\/]store\.js$/,
+
+                    plugins: [
+                        [
+                            '@babel/plugin-proposal-decorators',
+                            {
+                                legacy: true
+                            }
+                        ],
+                        '@babel/plugin-proposal-class-properties'
                     ]
                 }
             ],

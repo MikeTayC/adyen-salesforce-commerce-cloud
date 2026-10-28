@@ -5,6 +5,332 @@ module.exports = function transformReadableOptionalChaining({ types: t }) {
         return t.cloneNode(node, true);
     }
 
+    /**
+     * Returns true when a parameter default can be removed without
+     * adding an initialization statement.
+     *
+     * Examples:
+     *
+     *     attemptId = null
+     *     value = undefined
+     */
+    function isRemovableParameterDefault(node) {
+        return (
+            t.isNullLiteral(node) ||
+            (
+                t.isIdentifier(node) &&
+                node.name === 'undefined'
+            )
+        );
+    }
+
+    /**
+     * Converts function default parameters into readable initialization
+     * statements suitable for SFCC server-side code.
+     *
+     * Example:
+     *
+     *     function getService(service, reqMethod = 'POST') {
+     *
+     * becomes:
+     *
+     *     function getService(service, reqMethod) {
+     *         if (!reqMethod) {
+     *             reqMethod = 'POST';
+     *         }
+     *
+     * Example:
+     *
+     *     function submitData(requestObject, attemptId = null) {
+     *
+     * becomes:
+     *
+     *     function submitData(requestObject, attemptId) {
+     */
+    function transformDefaultParameters(path) {
+        const initializationStatements = [];
+        let changed = false;
+
+        path.node.params = path.node.params.map((parameter) => {
+            if (!t.isAssignmentPattern(parameter)) {
+                return parameter;
+            }
+
+            if (!t.isIdentifier(parameter.left)) {
+                throw path.buildCodeFrameError(
+                    'Default parameters using destructuring are not ' +
+                    'supported by the readable parameter transform.'
+                );
+            }
+
+            changed = true;
+
+            const identifier = clone(parameter.left);
+            const defaultValue = clone(parameter.right);
+
+            if (!isRemovableParameterDefault(defaultValue)) {
+                initializationStatements.push(
+                    t.ifStatement(
+                        t.unaryExpression(
+                            '!',
+                            clone(identifier)
+                        ),
+                        t.blockStatement([
+                            t.expressionStatement(
+                                t.assignmentExpression(
+                                    '=',
+                                    clone(identifier),
+                                    defaultValue
+                                )
+                            )
+                        ])
+                    )
+                );
+            }
+
+            return identifier;
+        });
+
+        if (!changed || initializationStatements.length === 0) {
+            return;
+        }
+
+        /*
+         * A concise arrow function has an expression body, so convert it
+         * into a block before inserting the initialization statements.
+         *
+         * Example:
+         *
+         *     (value = 'default') => value
+         *
+         * becomes:
+         *
+         *     (value) => {
+         *         if (!value) {
+         *             value = 'default';
+         *         }
+         *
+         *         return value;
+         *     }
+         */
+        if (
+            path.isArrowFunctionExpression() &&
+            !t.isBlockStatement(path.node.body)
+        ) {
+            path.node.body = t.blockStatement([
+                ...initializationStatements,
+                t.returnStatement(
+                    clone(path.node.body)
+                )
+            ]);
+
+            return;
+        }
+
+        if (!t.isBlockStatement(path.node.body)) {
+            throw path.buildCodeFrameError(
+                'Cannot insert readable default-parameter logic into ' +
+                'a function without a block body.'
+            );
+        }
+
+        path.node.body.body.unshift(
+            ...initializationStatements
+        );
+    }
+
+    /**
+     * Returns true when a default value does not need an explicit
+     * assignment in the generated SFCC code.
+     */
+    function isRemovableDefault(node) {
+        return (
+            t.isNullLiteral(node) ||
+            (
+                t.isIdentifier(node) &&
+                node.name === 'undefined'
+            )
+        );
+    }
+
+    /**
+     * Builds a member expression for one property in an object pattern.
+     */
+    function buildPropertyAccess(source, property) {
+        return t.memberExpression(
+            clone(source),
+            clone(property.key),
+            property.computed
+        );
+    }
+
+    /**
+     * Recursively converts an object pattern into ordinary property
+     * assignments.
+     *
+     * Example:
+     *
+     *     {
+     *         response: {
+     *             resultCode
+     *         }
+     *     }
+     *
+     * becomes:
+     *
+     *     var resultCode = source.response.resultCode;
+     */
+    function collectObjectPatternDeclarations(
+        path,
+        pattern,
+        source,
+        declarations,
+        defaultStatements
+    ) {
+        pattern.properties.forEach((property) => {
+            if (t.isRestElement(property)) {
+                throw path.buildCodeFrameError(
+                    'Object rest properties must be transformed before ' +
+                    'the readable destructuring transform.'
+                );
+            }
+
+            if (!t.isObjectProperty(property)) {
+                throw path.buildCodeFrameError(
+                    'Unsupported object destructuring property.'
+                );
+            }
+
+            const propertyAccess = buildPropertyAccess(
+                source,
+                property
+            );
+
+            if (t.isObjectPattern(property.value)) {
+                collectObjectPatternDeclarations(
+                    path,
+                    property.value,
+                    propertyAccess,
+                    declarations,
+                    defaultStatements
+                );
+
+                return;
+            }
+
+            if (t.isAssignmentPattern(property.value)) {
+                const identifier = property.value.left;
+                const defaultValue = property.value.right;
+
+                if (!t.isIdentifier(identifier)) {
+                    throw path.buildCodeFrameError(
+                        'Only identifier defaults are supported by the ' +
+                        'readable destructuring transform.'
+                    );
+                }
+
+                declarations.push(
+                    t.variableDeclarator(
+                        clone(identifier),
+                        propertyAccess
+                    )
+                );
+
+                if (!isRemovableDefault(defaultValue)) {
+                    defaultStatements.push(
+                        t.ifStatement(
+                            t.unaryExpression(
+                                '!',
+                                clone(identifier)
+                            ),
+                            t.blockStatement([
+                                t.expressionStatement(
+                                    t.assignmentExpression(
+                                        '=',
+                                        clone(identifier),
+                                        clone(defaultValue)
+                                    )
+                                )
+                            ])
+                        )
+                    );
+                }
+
+                return;
+            }
+
+            if (!t.isIdentifier(property.value)) {
+                throw path.buildCodeFrameError(
+                    'Unsupported nested destructuring value.'
+                );
+            }
+
+            declarations.push(
+                t.variableDeclarator(
+                    clone(property.value),
+                    propertyAccess
+                )
+            );
+        });
+    }
+
+    /**
+     * Converts object-destructuring variable declarations into readable
+     * direct property assignments.
+     */
+    function transformObjectDestructuring(path) {
+        const declarations = [];
+        const defaultStatements = [];
+        let changed = false;
+
+        path.node.declarations.forEach((declaration) => {
+            if (!t.isObjectPattern(declaration.id)) {
+                declarations.push(
+                    clone(declaration)
+                );
+
+                return;
+            }
+
+            if (!declaration.init) {
+                declarations.push(
+                    clone(declaration)
+                );
+
+                return;
+            }
+
+            changed = true;
+
+            collectObjectPatternDeclarations(
+                path,
+                declaration.id,
+                declaration.init,
+                declarations,
+                defaultStatements
+            );
+        });
+
+        if (!changed) {
+            return;
+        }
+
+        const replacement = [];
+
+        if (declarations.length) {
+            replacement.push(
+                t.variableDeclaration(
+                    path.node.kind,
+                    declarations
+                )
+            );
+        }
+
+        replacement.push(...defaultStatements);
+
+        path.replaceWithMultiple(replacement);
+    }
+
     function removeAdyenHeader(comments) {
         if (!comments) {
             return comments;
@@ -373,6 +699,18 @@ module.exports = function transformReadableOptionalChaining({ types: t }) {
             ArrowFunctionExpression: {
                 exit(path) {
                     addBlockToConditionalArrow(path);
+                }
+            },
+
+            VariableDeclaration: {
+                exit(path) {
+                    transformObjectDestructuring(path);
+                }
+            },
+
+            Function: {
+                enter(path) {
+                    transformDefaultParameters(path);
                 }
             }
         }

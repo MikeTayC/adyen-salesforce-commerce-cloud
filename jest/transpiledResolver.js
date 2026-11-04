@@ -1,7 +1,24 @@
 'use strict';
 
-const fs = require('fs');
-const path = require('path');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const existenceCache = new Map();
+
+function fileExists(filePath) {
+    if (existenceCache.has(filePath)) {
+        return existenceCache.get(filePath);
+    }
+
+    const exists = fs.existsSync(filePath);
+
+    existenceCache.set(
+        filePath,
+        exists
+    );
+
+    return exists;
+}
 
 const projectRoot = path.resolve(__dirname, '..');
 
@@ -107,7 +124,7 @@ module.exports = function transpiledResolver(
      * Redirect only when the corresponding generated implementation
      * actually exists. Otherwise preserve the original resolution.
      */
-    if (fs.existsSync(transpiledPath)) {
+    if (fileExists(transpiledPath)) {
         return transpiledPath;
     }
 

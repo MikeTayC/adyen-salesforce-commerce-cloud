@@ -275,6 +275,36 @@ module.exports = function transformAdyenSfccCompatibility({
      * An explicit undefined default does not require a replacement
      * statement.
      */
+    /**
+     * Inserts statements at the beginning of a loop body.
+     *
+     * for-in and for-of declarations are evaluated once per iteration, so
+     * destructuring defaults must also run once per iteration.
+     */
+    function prependStatementsToLoopBody(
+        loopPath,
+        statements
+    ) {
+        const bodyPath =
+            loopPath.get('body');
+
+        if (bodyPath.isBlockStatement()) {
+            bodyPath.unshiftContainer(
+                'body',
+                statements
+            );
+
+            return;
+        }
+
+        bodyPath.replaceWith(
+            t.blockStatement([
+                ...statements.map(clone),
+                clone(bodyPath.node)
+            ])
+        );
+    }
+
     function transformObjectDestructuringDefaults(path) {
         const defaultStatements = [];
         let changed = false;
@@ -331,6 +361,44 @@ module.exports = function transformAdyenSfccCompatibility({
 
         if (!changed || defaultStatements.length === 0) {
             return;
+        }
+
+        const parentPath = path.parentPath;
+
+        /*
+         * The left side of for-in and for-of is evaluated once per
+         * iteration. Defaults must therefore run at the start of every
+         * iteration.
+         */
+        if (
+            (
+                parentPath.isForInStatement() ||
+                parentPath.isForOfStatement()
+            ) &&
+            parentPath.node.left === path.node
+        ) {
+            prependStatementsToLoopBody(
+                parentPath,
+                defaultStatements
+            );
+
+            return;
+        }
+
+        /*
+         * A classic for-loop initializer runs once before the first test.
+         * Moving defaults into the loop body would change evaluation timing,
+         * so reject this rare unsupported form rather than emit incorrect
+         * code.
+         */
+        if (
+            parentPath.isForStatement() &&
+            parentPath.node.init === path.node
+        ) {
+            throw path.buildCodeFrameError(
+                'Object destructuring defaults in a classic ' +
+                'for-loop initializer are not supported.'
+            );
         }
 
         path.insertAfter(defaultStatements);
@@ -574,6 +642,7 @@ module.exports = function transformAdyenSfccCompatibility({
      *
      *     getProfile           -> profile
      *     getWallet            -> wallet
+     *     getPaymentMethod     -> paymentMethod
      *     getPaymentProcessor  -> paymentProcessor
      *     getAbsURL            -> absURL
      *     getCustomerID        -> customerID
@@ -614,7 +683,8 @@ module.exports = function transformAdyenSfccCompatibility({
         }
 
         /*
-        * Normalize a leading acronym.
+        * Normalize a leading acronym while preserving the remaining
+        * camel-case portion.
         *
         *     URLValue  -> urlValue
         *     UUIDValue -> uuidValue
@@ -625,9 +695,10 @@ module.exports = function transformAdyenSfccCompatibility({
         );
 
         /*
-        * Ordinary accessor results use lower camel case.
+        * Normalize ordinary PascalCase accessor results.
         *
         *     Profile          -> profile
+        *     PaymentMethod    -> paymentMethod
         *     PaymentProcessor -> paymentProcessor
         *     AbsURL           -> absURL
         *     CustomerID       -> customerID
@@ -722,14 +793,78 @@ module.exports = function transformAdyenSfccCompatibility({
      * Finds the statement before which an optional-chain temporary can be
      * declared.
      */
-    function getTemporaryDeclarationTarget(path) {
-        const statementPath = path.getStatementParent();
-
-        if (!statementPath) {
-            throw path.buildCodeFrameError('Could not find a containing statement for an ' + 'optional-chain temporary.');
+    /**
+     * Ensures that a statement can have declarations inserted before it.
+     *
+     * A statement used directly as an if branch or loop body has no sibling
+     * statement list. Wrap those single-statement bodies in a block and
+     * return the original statement inside that block.
+     */
+    function ensureStatementListPath(
+        path,
+        statementPath
+    ) {
+        if (statementPath.inList) {
+            return statementPath;
         }
 
-        return statementPath;
+        const parentPath =
+            statementPath.parentPath;
+
+        const isSingleStatementBody =
+            (
+                parentPath.isIfStatement() &&
+                (
+                    parentPath.node.consequent ===
+                        statementPath.node ||
+                    parentPath.node.alternate ===
+                        statementPath.node
+                )
+            ) ||
+            (
+                (
+                    parentPath.isForStatement() ||
+                    parentPath.isForInStatement() ||
+                    parentPath.isForOfStatement() ||
+                    parentPath.isWhileStatement() ||
+                    parentPath.isDoWhileStatement() ||
+                    parentPath.isWithStatement()
+                ) &&
+                parentPath.node.body ===
+                    statementPath.node
+            );
+
+        if (!isSingleStatementBody) {
+            throw path.buildCodeFrameError(
+                'Could not create a statement-list container ' +
+                'for an optional-chain temporary.'
+            );
+        }
+
+        statementPath.replaceWith(
+            t.blockStatement([
+                clone(statementPath.node)
+            ])
+        );
+
+        return statementPath.get('body.0');
+    }
+
+    function getTemporaryDeclarationTarget(path) {
+        const statementPath =
+            path.getStatementParent();
+
+        if (!statementPath) {
+            throw path.buildCodeFrameError(
+                'Could not find a containing statement for an ' +
+                'optional-chain temporary.'
+            );
+        }
+
+        return ensureStatementListPath(
+            path,
+            statementPath
+        );
     }
 
     /**
@@ -968,18 +1103,33 @@ module.exports = function transformAdyenSfccCompatibility({
      * Inserts generated declarations before the statement containing the
      * optional chain.
      */
-    function insertDeclarationsBeforeStatement(path, declarations) {
+    function insertDeclarationsBeforeStatement(
+        path,
+        declarations
+    ) {
         if (!declarations.length) {
             return;
         }
 
-        const statementPath = path.getStatementParent();
+        const statementPath =
+            path.getStatementParent();
 
         if (!statementPath) {
-            throw path.buildCodeFrameError('Could not find a containing statement for ' + 'readable optional-chain declarations.');
+            throw path.buildCodeFrameError(
+                'Could not find a containing statement for ' +
+                'readable optional-chain declarations.'
+            );
         }
 
-        statementPath.insertBefore(declarations);
+        const insertionTarget =
+            ensureStatementListPath(
+                path,
+                statementPath
+            );
+
+        insertionTarget.insertBefore(
+            declarations
+        );
     }
 
     /**
@@ -1356,7 +1506,13 @@ module.exports = function transformAdyenSfccCompatibility({
          * establishes that the base exists, emitting the same base guard
          * again is unnecessary.
          */
-        if (expressions.length === 1 && isAlreadyGuarded(path, base)) {
+        if (
+            expressions.length === 1 &&
+            isAlreadyGuarded(path, base) &&
+            !t.isAssignmentExpression(
+                expressions[0]
+            )
+        ) {
             return current;
         }
 

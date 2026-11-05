@@ -56,9 +56,18 @@ if [[ ! -f "$store_source" ]]; then
     exit 1
 fi
 
-
+echo ""
 echo "Workaround: copying store.js to avoid mobx babel transpilation"
 mkdir -p "$(dirname "$store_dest")"
 cp "$store_source" "$store_dest"
 
 echo "$store_source → $store_dest"
+
+
+echo ""
+# Normalize generated cartridge permissions to prevent mode-only Git diffs.
+find "$BUILD_ROOT" \
+    -type f \
+    -exec chmod 644 {} +
+
+echo "Normalized generated cartridge file permissions to 644."

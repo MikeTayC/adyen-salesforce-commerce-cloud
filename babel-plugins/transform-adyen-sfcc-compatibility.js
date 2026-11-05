@@ -14,24 +14,8 @@ module.exports = function transformAdyenSfccCompatibility({
     }
 
     /**
-     * Returns true when the optional chain occurs inside the expression body of
-     * a concise arrow function.
-     *
-     * Generated declarations cannot safely be inserted before the statement
-     * containing the arrow because they could reference arrow parameters outside
-     * their lexical scope.
-     *
-     * Example:
-     *
-     *     var getAmount = (currency, currentBasket) =>
-     *         currentBasket
-     *             ?.getTotalGrossPrice()
-     *             .isAvailable()
-     *             ? getAmountFromBasket(currentBasket)
-     *             : getDefaultAmount(currency);
-     *
-     * A declaration involving currentBasket must not be inserted before the
-     * variable declaration because currentBasket only exists inside the arrow.
+     * Detects optional chains inside concise arrow bodies where declarations
+     * cannot safely be hoisted outside the arrow scope.
      */
     function isInsideConciseArrowBody(path) {
         const functionPath = path.getFunctionParent();
@@ -40,22 +24,12 @@ module.exports = function transformAdyenSfccCompatibility({
     }
 
     /**
-     * Converts an SFCC collection for...of loop into an iterator loop.
+     * Converts SFCC collection for...of loops to iterator loops.
      *
      * Example:
-     *
-     *     for (var item of collection.toArray()) {
-     *         process(item);
-     *     }
-     *
-     * becomes:
-     *
-     *     var itemIterator = collection.iterator();
-     *
-     *     while (itemIterator.hasNext()) {
-     *         var item = itemIterator.next();
-     *         process(item);
-     *     }
+     *   for (var item of collection.toArray()) { ... }
+     *   -> var iterator = collection.iterator();
+     *      while (iterator.hasNext()) { var item = iterator.next(); ... }
      */
     function transformForOfToIterator(path) {
         const left = path.node.left;
@@ -111,51 +85,19 @@ module.exports = function transformAdyenSfccCompatibility({
         path.replaceWithMultiple([iteratorDeclaration, whileStatement]);
     }
 
-    /**
-     * Returns true when a default can be removed without adding an
-     * initialization statement.
-     *
-     * Only an explicit undefined default is removable. All other
-     * defaults are reproduced with an === undefined fallback check.
-     *
-     * Example:
-     *
-     *     value = undefined
-     */
+    /** Returns true when an explicit `= undefined` default can be removed. */
     function isRemovableParameterDefault(node) {
         return t.isIdentifier(node) && node.name === 'undefined';
     }
 
     /**
-     * Converts function default parameters into readable initialization
-     * statements suitable for SFCC server-side code.
-     *
-     * JavaScript parameter defaults apply only when the argument is
-     * omitted or explicitly undefined. Values such as null, an empty
-     * string, zero, and false must be preserved.
+     * Converts function defaults to explicit undefined checks.
      *
      * Example:
+     *   function fn(value = 'default') {}
+     *   -> function fn(value) { if (value === undefined) value = 'default'; }
      *
-     *     function getService(service, reqMethod = 'POST') {
-     *
-     * becomes:
-     *
-     *     function getService(service, reqMethod) {
-     *         if (reqMethod === undefined) {
-     *             reqMethod = 'POST';
-     *         }
-     *
-     * Example:
-     *
-     *     function submitData(requestObject, attemptId = null) {
-     *
-     * becomes:
-     *
-     *     function submitData(requestObject, attemptId) {
-     *         if (attemptId === undefined) {
-     *             attemptId = null;
-     *         }
-     *     }
+     * null, '', 0, and false are preserved.
      */
     function transformDefaultParameters(path) {
         const initializationStatements = [];
@@ -232,55 +174,8 @@ module.exports = function transformAdyenSfccCompatibility({
         path.node.body.body.unshift(...initializationStatements);
     }
 
-    /**
-     * Converts unsupported defaults inside object destructuring while
-     * preserving the destructuring itself.
-     *
-     * JavaScript destructuring defaults apply only when the extracted
-     * property value is undefined. Values such as null, an empty string,
-     * zero, and false must be preserved.
-     *
-     * Example:
-     *
-     *     var {
-     *         paymentMethod = null
-     *     } = source;
-     *
-     * becomes:
-     *
-     *     var {
-     *         paymentMethod
-     *     } = source;
-     *
-     *     if (paymentMethod === undefined) {
-     *         paymentMethod = null;
-     *     }
-     *
-     * Example:
-     *
-     *     var {
-     *         quantity = 1
-     *     } = source;
-     *
-     * becomes:
-     *
-     *     var {
-     *         quantity
-     *     } = source;
-     *
-     *     if (quantity === undefined) {
-     *         quantity = 1;
-     *     }
-     *
-     * An explicit undefined default does not require a replacement
-     * statement.
-     */
-    /**
-     * Inserts statements at the beginning of a loop body.
-     *
-     * for-in and for-of declarations are evaluated once per iteration, so
-     * destructuring defaults must also run once per iteration.
-     */
+
+    /** Prepends generated defaults to a for-in/for-of body once per iteration. */
     function prependStatementsToLoopBody(
         loopPath,
         statements
@@ -305,6 +200,14 @@ module.exports = function transformAdyenSfccCompatibility({
         );
     }
 
+    /**
+     * Removes defaults from object destructuring and inserts equivalent checks.
+     *
+     * Example:
+     *   var { quantity = 1 } = source;
+     *   -> var { quantity } = source;
+     *      if (quantity === undefined) quantity = 1;
+     */
     function transformObjectDestructuringDefaults(path) {
         const defaultStatements = [];
         let changed = false;
@@ -404,6 +307,7 @@ module.exports = function transformAdyenSfccCompatibility({
         path.insertAfter(defaultStatements);
     }
 
+    /** Removes Adyen copyright/license header comments. */
     function removeAdyenHeader(comments) {
         if (!comments) {
             return comments;
@@ -418,6 +322,7 @@ module.exports = function transformAdyenSfccCompatibility({
         });
     }
 
+    /** Removes Adyen headers attached throughout a file AST. */
     function removeAdyenHeaders(path) {
         if (path.node.comments) {
             path.node.comments = removeAdyenHeader(path.node.comments);
@@ -441,14 +346,8 @@ module.exports = function transformAdyenSfccCompatibility({
     }
 
     /**
-     * Determines whether the parent continues the current member or
-     * function-call chain.
-     *
-     * For example:
-     *
-     *     currentBasket?.getTotalGrossPrice().isAvailable()
-     *
-     * must be transformed as one complete expression.
+     * Returns whether the parent continues the current member/call chain.
+     * Example: `basket?.getPrice().isAvailable()` is one chain.
      */
     function parentContinuesChain(path) {
         const parent = path.parentPath;
@@ -468,10 +367,7 @@ module.exports = function transformAdyenSfccCompatibility({
         return false;
     }
 
-    /**
-     * Finds the outermost member or call expression belonging to the
-     * optional chain.
-     */
+    /** Returns the outermost member/call path in an optional chain. */
     function getOutermostChainPath(path) {
         let current = path;
 
@@ -483,16 +379,8 @@ module.exports = function transformAdyenSfccCompatibility({
     }
 
     /**
-     * Determines whether the optional-chain base is already checked by
-     * an enclosing if statement.
-     *
-     * This supports nested blocks and callback functions, for example:
-     *
-     *     if (items) {
-     *         Transaction.wrap(() => {
-     *             items?.forEach(callback);
-     *         });
-     *     }
+     * Returns whether an enclosing if already guards the optional-chain base.
+     * Example: `if (items) { items?.forEach(callback); }`
      */
     function isGuardedByEnclosingIf(path, base) {
         let currentPath = path;
@@ -510,14 +398,7 @@ module.exports = function transformAdyenSfccCompatibility({
         return false;
     }
 
-    /**
-     * Returns true when the node is an empty-object fallback for the
-     * supplied base expression.
-     *
-     * Example:
-     *
-     *     storedPaymentMethod || {}
-     */
+    /** Returns whether node is an `(object || {})` fallback for base. */
     function isObjectFallbackForBase(node, base) {
         return (
             t.isLogicalExpression(node, {
@@ -529,18 +410,7 @@ module.exports = function transformAdyenSfccCompatibility({
         );
     }
 
-    /**
-     * Returns true when an expression establishes that the supplied base
-     * exists.
-     *
-     * This recognizes direct guards:
-     *
-     *     object
-     *
-     * and property reads through an object fallback:
-     *
-     *     (object || {}).property
-     */
+    /** Returns whether an expression establishes that the optional-chain base exists. */
     function expressionGuardsBase(node, base) {
         if (t.isNodesEquivalent(node, base)) {
             return true;
@@ -566,19 +436,8 @@ module.exports = function transformAdyenSfccCompatibility({
     }
 
     /**
-     * Determines whether the optional-chain base is already protected by
-     * the left side of a surrounding && expression.
-     *
-     * Example:
-     *
-     *     (storedPaymentMethod || {})
-     *         .supportedShopperInteractions &&
-     *     storedPaymentMethod
-     *         ?.supportedShopperInteractions
-     *         .indexOf('Ecommerce') > -1
-     *
-     * The left operand already establishes that storedPaymentMethod exists,
-     * so the transformed right operand does not need another base guard.
+     * Returns whether the left side of an enclosing && already guards base.
+     * Example: `(item || {}).values && item?.values.indexOf(value) > -1`.
      */
     function isGuardedByLeftSideOfLogicalAnd(path, base) {
         let currentPath = path;
@@ -602,18 +461,12 @@ module.exports = function transformAdyenSfccCompatibility({
         return false;
     }
 
-    /**
-     * Returns true when the optional-chain base has already been checked
-     * either by an enclosing if statement or by the left side of &&.
-     */
+    /** Returns whether the optional-chain base is already guarded. */
     function isAlreadyGuarded(path, base) {
         return isGuardedByEnclosingIf(path, base) || isGuardedByLeftSideOfLogicalAnd(path, base);
     }
 
-    /**
-     * Returns true when evaluating an expression more than once could repeat
-     * a function or method call.
-     */
+    /** Returns whether repeated evaluation could repeat a function call. */
     function containsCallExpression(node) {
         if (t.isCallExpression(node) || t.isOptionalCallExpression(node)) {
             return true;
@@ -636,21 +489,8 @@ module.exports = function transformAdyenSfccCompatibility({
 
 
     /**
-     * Converts an accessor method name into a readable result name.
-     *
-     * Examples:
-     *
-     *     getProfile           -> profile
-     *     getWallet            -> wallet
-     *     getPaymentMethod     -> paymentMethod
-     *     getPaymentProcessor  -> paymentProcessor
-     *     getAbsURL            -> absURL
-     *     getCustomerID        -> customerID
-     *     getID                -> id
-     *     getURL               -> url
-     *     getUUID              -> uuid
-     *     isAvailable          -> available
-     *     isURLValid           -> urlValid
+     * Converts accessor names to readable lower-camel-case result names.
+     * Examples: getProfile -> profile; getAbsURL -> absURL; getID -> id.
      */
     function normalizeAccessorName(methodName) {
         let value = methodName;
@@ -709,10 +549,7 @@ module.exports = function transformAdyenSfccCompatibility({
         );
     }
 
-    /**
-     * Returns the set of names generated for the current function or program
-     * scope.
-     */
+    /** Returns generated names reserved in the current function/program scope. */
     function getGeneratedNamesForScope(path) {
         const ownerScope =
             path.scope.getFunctionParent() ||
@@ -730,10 +567,7 @@ module.exports = function transformAdyenSfccCompatibility({
         );
     }
 
-    /**
-     * Returns true when a name is already occupied by source code, a global,
-     * or another declaration generated during this plugin traversal.
-     */
+    /** Returns whether a name conflicts with source, global, or generated bindings. */
     function isIdentifierNameUnavailable(
         path,
         name
@@ -748,9 +582,7 @@ module.exports = function transformAdyenSfccCompatibility({
         );
     }
 
-    /**
-     * Reserves a generated name in the current function or program scope.
-     */
+    /** Reserves a generated identifier in the current function/program scope. */
     function reserveGeneratedName(
         path,
         name
@@ -760,16 +592,7 @@ module.exports = function transformAdyenSfccCompatibility({
         );
     }
 
-    /**
-     * Returns a readable name hint for a generated optional-chain temporary.
-     *
-     * Examples:
-     *
-     *     customer.getProfile()          -> profile
-     *     profile.getWallet()            -> wallet
-     *     method.getPaymentProcessor()   -> paymentProcessor
-     *     processor.getID()              -> id
-     */
+    /** Returns a readable name hint for an optional-chain temporary. */
     function getTemporaryNameHint(expression) {
         if (
             !t.isCallExpression(expression) ||
@@ -790,15 +613,8 @@ module.exports = function transformAdyenSfccCompatibility({
     }
 
     /**
-     * Finds the statement before which an optional-chain temporary can be
-     * declared.
-     */
-    /**
-     * Ensures that a statement can have declarations inserted before it.
-     *
-     * A statement used directly as an if branch or loop body has no sibling
-     * statement list. Wrap those single-statement bodies in a block and
-     * return the original statement inside that block.
+     * Ensures declarations can be inserted before a statement, wrapping
+     * single-statement if/loop bodies in a block when necessary.
      */
     function ensureStatementListPath(
         path,
@@ -850,6 +666,7 @@ module.exports = function transformAdyenSfccCompatibility({
         return statementPath.get('body.0');
     }
 
+    /** Returns the safe statement path before which a temporary can be declared. */
     function getTemporaryDeclarationTarget(path) {
         const statementPath =
             path.getStatementParent();
@@ -867,10 +684,7 @@ module.exports = function transformAdyenSfccCompatibility({
         );
     }
 
-    /**
-     * Declares a scoped temporary variable before the statement containing
-     * the optional chain.
-     */
+    /** Declares a collision-safe temporary before the containing statement. */
     function createChainTemporary(
         path,
         expression
@@ -900,23 +714,8 @@ module.exports = function transformAdyenSfccCompatibility({
     }
 
     /**
-     * Replaces a call-based intermediate receiver with an assignment to a
-     * generated temporary.
-     *
-     * Example:
-     *
-     *     customer?.getProfile()?.getWallet()
-     *
-     * becomes approximately:
-     *
-     *     var _profile;
-     *
-     *     customer &&
-     *         (_profile = customer.getProfile()) &&
-     *         _profile.getWallet()
-     *
-     * This checks the result of getProfile(), not whether getProfile itself
-     * exists.
+     * Caches a call-based optional receiver so it is evaluated once.
+     * Example: `customer?.getProfile()?.getWallet()` caches `getProfile()`.
      */
     function cacheIntermediateExpression(path, expression) {
         const identifier = createChainTemporary(path, expression);
@@ -927,14 +726,7 @@ module.exports = function transformAdyenSfccCompatibility({
         };
     }
 
-    /**
-     * Flattens a complete member/call chain into:
-     *
-     * {
-     *     base,
-     *     operations
-     * }
-     */
+    /** Flattens a member/call chain into a base and ordered operations. */
     function flattenChain(node) {
         if (t.isOptionalMemberExpression(node) || t.isMemberExpression(node)) {
             const chain = flattenChain(node.object);
@@ -967,9 +759,7 @@ module.exports = function transformAdyenSfccCompatibility({
         };
     }
 
-    /**
-     * Applies one member or call operation to the current expression.
-     */
+    /** Applies one member or call operation to an expression. */
     function applyOperation(current, operation) {
         if (operation.type === 'member') {
             return t.memberExpression(clone(current), clone(operation.property), operation.computed);
@@ -982,17 +772,7 @@ module.exports = function transformAdyenSfccCompatibility({
         throw new Error(`Unsupported optional-chain operation: ${operation.type}`);
     }
 
-    /**
-     * Returns a readable name for the value produced by an expression.
-     *
-     * Examples:
-     *
-     *     customer.getProfile()      -> profile
-     *     profile.getWallet()        -> wallet
-     *     method.getProcessor()      -> processor
-     *     processor.getID()          -> id
-     *     source.find(...)           -> findResult
-     */
+    /** Returns a readable name for a generated chain result. */
     function getExpressionNameHint(expression) {
         let propertyName = null;
 
@@ -1037,20 +817,7 @@ module.exports = function transformAdyenSfccCompatibility({
         return propertyName;
     }
 
-    /**
-     * Creates a readable identifier while avoiding collisions with source
-     * bindings, globals, and names generated earlier in the same scope.
-     *
-     * Normal output:
-     *
-     *     profile
-     *     wallet
-     *
-     * Collision output:
-     *
-     *     profile2
-     *     wallet2
-     */
+    /** Creates a readable collision-safe identifier, suffixing on conflicts. */
     function createReadableIdentifier(
         path,
         nameHint
@@ -1092,17 +859,12 @@ module.exports = function transformAdyenSfccCompatibility({
         return t.identifier(candidate);
     }
 
-    /**
-     * Creates the identifier used to hold the result of an optional-chain
-     * segment.
-     */
+    /** Creates the identifier used for an optional-chain segment result. */
     function createResultIdentifier(path, expression) {
         return createReadableIdentifier(path, getExpressionNameHint(expression));
     }
-    /**
-     * Inserts generated declarations before the statement containing the
-     * optional chain.
-     */
+
+    /** Inserts generated declarations before the containing statement. */
     function insertDeclarationsBeforeStatement(
         path,
         declarations
@@ -1132,27 +894,14 @@ module.exports = function transformAdyenSfccCompatibility({
         );
     }
 
-    /**
-     * Returns true when an operation starts a new optional segment.
-     */
+    /** Returns whether this operation starts a new optional-chain segment. */
     function startsOptionalSegment(operation) {
         return Boolean(operation.optional);
     }
 
     /**
-     * Divides a flattened chain into segments.
-     *
-     * Each optional operation starts a new segment. Normal operations after
-     * it remain in that segment until another optional operation is reached.
-     *
-     * Example:
-     *
-     *     customer?.getProfile()?.getWallet()
-     *
-     * becomes:
-     *
-     *     segment 1: ?.getProfile()
-     *     segment 2: ?.getWallet()
+     * Splits a flattened chain at optional boundaries.
+     * Example: `customer?.getProfile()?.getWallet()` -> two call segments.
      */
     function splitIntoOptionalSegments(operations) {
         const leadingOperations = [];
@@ -1181,10 +930,7 @@ module.exports = function transformAdyenSfccCompatibility({
         };
     }
 
-    /**
-     * Applies a list of operations while treating optional flags as segment
-     * markers rather than method-existence checks.
-     */
+    /** Applies one optional segment as ordinary operations. */
     function applySegmentOperations(receiver, operations) {
         return operations.reduce((current, operation) => {
             return applyOperation(
@@ -1196,18 +942,7 @@ module.exports = function transformAdyenSfccCompatibility({
         }, clone(receiver));
     }
 
-    /**
-     * Returns true when the optional chain is the complete expression in an
-     * ExpressionStatement and its resulting value is ignored.
-     *
-     * Examples:
-     *
-     *     fileReader?.close();
-     *     storedPaymentMethods?.forEach(callback);
-     *
-     * These should remain guarded expression statements. A variable should not
-     * be created solely to hold an unused return value.
-     */
+    /** Returns whether the chain result is ignored as a complete expression statement. */
     function isIgnoredExpressionResult(path) {
         return Boolean(
             path.parentPath &&
@@ -1218,16 +953,8 @@ module.exports = function transformAdyenSfccCompatibility({
     }
 
     /**
-     * Returns true when a chain containing calls can safely be represented by
-     * initialized declarations before its containing statement.
-     *
-     * Ignored expression results stay as guarded expression statements.
-     *
-     * Repeated boolean conditions stay inside the expression because they must
-     * be recalculated each time they are evaluated.
-     *
-     * Concise arrow bodies also stay as expressions because generated
-     * declarations cannot be inserted outside the arrow's lexical scope.
+     * Returns whether a call-based chain can become readable declarations.
+     * Excludes boolean contexts, concise arrows, and ignored results.
      */
     function canBuildReadableCallDeclarations(
         path,
@@ -1284,24 +1011,8 @@ module.exports = function transformAdyenSfccCompatibility({
     }
 
     /**
-     * Converts a call-based optional chain into readable declarations.
-     *
-     * Every explicit optional boundary becomes one guarded initializer.
-     * Documented methods are called directly once their receiver exists.
-     *
-     * Example:
-     *
-     *     customer?.getProfile()?.getWallet()
-     *
-     * becomes:
-     *
-     *     var profile =
-     *         customer && customer.getProfile();
-     *
-     *     var wallet =
-     *         profile && profile.getWallet();
-     *
-     * The original chain expression is then replaced by wallet.
+     * Converts call-based optional chains into guarded declarations.
+     * Example: `customer?.getProfile()?.getWallet()` -> `profile`, then `wallet`.
      */
     function buildReadableCallDeclarations(path, base, operations) {
         const parts = splitIntoOptionalSegments(operations);
@@ -1350,18 +1061,7 @@ module.exports = function transformAdyenSfccCompatibility({
         return receiver;
     }
 
-    /**
-     * Returns true when the optional chain itself is consumed directly as a
-     * boolean condition.
-     *
-     * Logical expressions such as:
-     *
-     *     object?.property || fallback
-     *
-     * are not automatically considered boolean contexts. The optional-chain
-     * result is being used as a value, so the object-fallback transform can
-     * still be applied.
-     */
+    /** Returns whether the optional chain is consumed directly as a boolean test. */
     function isBooleanChainContext(path) {
         const parent = path.parentPath;
 
@@ -1391,26 +1091,7 @@ module.exports = function transformAdyenSfccCompatibility({
         return false;
     }
 
-    /**
-     * Returns true when object fallbacks can safely represent the optional
-     * portion of the chain.
-     *
-     * Normal calls and property accesses are allowed before the first optional
-     * property. From the first optional operation onward, every operation must
-     * be an optional property read.
-     *
-     * Supported:
-     *
-     *     response?.paymentMethod
-     *     response._links?.next?.href
-     *     JSON.parse(data).installments?.value
-     *
-     * Not supported:
-     *
-     *     fileReader?.close()
-     *     object.method?.()
-     *     object?.method()
-     */
+    /** Returns whether the optional portion contains only property reads suitable for `{}` fallbacks. */
     function canUseObjectFallback(operations) {
         const firstOptionalIndex = operations.findIndex((operation) => operation.optional);
 
@@ -1422,24 +1103,8 @@ module.exports = function transformAdyenSfccCompatibility({
     }
 
     /**
-     * Converts the optional property portion of a chain into object
-     * fallbacks while preserving all normal operations before it.
-     *
-     * Example:
-     *
-     *     JSON.parse(data).installments?.value
-     *
-     * becomes:
-     *
-     *     (JSON.parse(data).installments || {}).value
-     *
-     * Example:
-     *
-     *     response._links?.next?.href
-     *
-     * becomes:
-     *
-     *     (((response._links || {}).next || {}).href)
+     * Builds `{}` fallbacks for property-only optional chains.
+     * Example: `JSON.parse(data).installments?.value` -> `(JSON.parse(data).installments || {}).value`.
      */
     function buildObjectFallbackChain(base, operations) {
         let current = clone(base);
@@ -1464,19 +1129,7 @@ module.exports = function transformAdyenSfccCompatibility({
         return current;
     }
 
-    /**
-     * Builds the readable && representation for boolean checks, method calls,
-     * and mixed optional/non-optional chains.
-     *
-     * Each optional boundary checks the value immediately before that
-     * boundary. Native methods are called directly once their receiver has
-     * been established.
-     *
-     * Intermediate expressions containing calls are cached so that calls such
-     * as getProfile(), getWallet(), getPaymentMethod(), and
-     * getPaymentProcessor() are never executed more than once by the generated
-     * guard expression.
-     */
+    /** Builds the readable && form, caching call-based receivers when needed. */
     function buildAndChain(path, base, operations) {
         let current = clone(base);
         const expressions = [];
@@ -1527,16 +1180,7 @@ module.exports = function transformAdyenSfccCompatibility({
         }, null);
     }
 
-    /**
-     * Converts a complete optional chain into a readable SFCC-compatible
-     * expression.
-     *
-     * Property-only value reads use object fallbacks.
-     *
-     * Chains containing calls are divided into optional segments. Each
-     * segment becomes an initialized variable so every call is evaluated once
-     * and every explicit optional boundary is preserved.
-     */
+    /** Selects object fallback, readable declarations, or an && chain. */
     function buildLogicalChain(path, node) {
         const {
             base,
@@ -1554,9 +1198,7 @@ module.exports = function transformAdyenSfccCompatibility({
         return buildAndChain(path, base, operations);
     }
 
-    /**
-     * Replaces the complete chain containing the supplied optional node.
-     */
+    /** Replaces one complete optional chain with its compatible representation. */
     function transformChain(path) {
         const outermostPath = getOutermostChainPath(path);
 
@@ -1567,17 +1209,7 @@ module.exports = function transformAdyenSfccCompatibility({
         outermostPath.replaceWith(replacement);
     }
 
-    /**
-     * Converts Object.hasOwn() into an SFCC-compatible property check.
-     *
-     * Example:
-     *
-     *     Object.hasOwn(object, key)
-     *
-     * becomes:
-     *
-     *     Object.prototype.hasOwnProperty.call(object, key)
-     */
+    /** Converts `Object.hasOwn(object, key)` to the prototype `hasOwnProperty.call` form. */
     function transformObjectHasOwn(path) {
         const callee = path.node.callee;
 

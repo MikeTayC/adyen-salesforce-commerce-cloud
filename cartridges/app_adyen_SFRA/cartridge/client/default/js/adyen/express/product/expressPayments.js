@@ -101,12 +101,13 @@ async function calculateInitialAmount(currency) {
 function renderApplePayButton() {
     $('body').on(`product:render${APPLE_PAY}Button`, async (e, response) => {
         const { paymentMethodsResponse: { AdyenPaymentMethods, applicationInfo, adyenTranslations, amount: { currency } } = {}, button } = response;
-        const applePayConfig = getPaymentMethodConfig(AdyenPaymentMethods, APPLE_PAY);
+        const applePayMethod = AdyenPaymentMethods?.paymentMethods?.find((pm) => pm.type === APPLE_PAY);
+        const applePayConfig = applePayMethod?.configuration;
         if (!applePayConfig) {
             return;
         }
         const initialAmount = await calculateInitialAmount(currency);
-        const applePay = new ApplePay(applePayConfig, applicationInfo, adyenTranslations, true, initialAmount);
+        const applePay = new ApplePay(applePayConfig, applePayMethod?.brands, applicationInfo, adyenTranslations, true, initialAmount);
         const applePayComponent = await applePay.getComponent();
         // getComponent resolves to null when Apple Pay is not available on the device
         if (!applePayComponent) {

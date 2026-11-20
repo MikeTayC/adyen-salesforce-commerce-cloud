@@ -66,9 +66,10 @@ async function renderGooglePayButtonListener(e, response) {
 }
 async function renderApplePayButtonListener(e, response) {
     const { paymentMethodsResponse: { AdyenPaymentMethods, applicationInfo, adyenTranslations } = {}, button } = response;
-    const applePayConfig = getPaymentMethodConfig(AdyenPaymentMethods, APPLE_PAY);
+    const applePayMethod = AdyenPaymentMethods?.paymentMethods?.find((pm) => pm.type === APPLE_PAY);
+    const applePayConfig = applePayMethod?.configuration;
     if (!applePayConfig) return;
-    const applePay = new ApplePay(applePayConfig, applicationInfo, adyenTranslations, false);
+    const applePay = new ApplePay(applePayConfig, applePayMethod?.brands, applicationInfo, adyenTranslations, false);
     const applePayComponent = await applePay.getComponent();
     // getComponent resolves to null when Apple Pay is not available on the device
     if (!applePayComponent) return;

@@ -1,0 +1,18 @@
+'use strict';
+
+var Order = require('dw/order/Order');
+var OrderMgr = require('dw/order/OrderMgr');
+var AdyenLogs = require('*/cartridge/adyen/logs/adyenCustomLogs');
+var { isWebhookSuccessful } = require('*/cartridge/utils/webhookUtils');
+function handle({ order, customObj }) {
+    if (isWebhookSuccessful(customObj) && order.status.value === Order.ORDER_STATUS_CANCELLED) {
+        order.setPaymentStatus(Order.PAYMENT_STATUS_PAID);
+        order.setExportStatus(Order.EXPORT_STATUS_READY);
+        order.setConfirmationStatus(Order.CONFIRMATION_STATUS_CONFIRMED);
+        OrderMgr.undoCancelOrder(order);
+        AdyenLogs.info_log(`Undo failed capture, Order ${order.orderNo} updated to status PAID.`);
+    }
+}
+module.exports = {
+    handle
+};

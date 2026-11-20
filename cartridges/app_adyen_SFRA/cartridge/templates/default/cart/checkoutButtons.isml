@@ -1,0 +1,62 @@
+<input type="hidden" id="adyen-token" name="${pdict.csrf.tokenName}" value="${pdict.csrf.token}"/>
+<isset name="AdyenHelper" value="${require('*/cartridge/adyen/utils/adyenHelper')}" scope="page"/>
+<isset name="AdyenConfigs" value="${require('*/cartridge/adyen/utils/adyenConfigs')}" scope="page" />
+<isset name="localeHelper" value="${require('*/cartridge/adyen/utils/localeHelper')}" scope="page" />
+<script src="${AdyenHelper.getCheckoutUrl()}" type="text/javascript"></script>
+<link rel="stylesheet" type="text/css" href="${AdyenHelper.getCheckoutCSS()}"/>
+<link rel="stylesheet" type="text/css" href="${URLUtils.staticURL('/css/adyenCss.css')}" />
+<isif condition="${request.getHttpQueryString() && request.getHttpQueryString().indexOf('amazonCheckoutSessionId') > -1} ">
+    <script type="text/javascript">
+        window.clientKey = "${AdyenConfigs.getAdyenClientKey()}";
+        window.locale = "${localeHelper.getShopperLocale(request.locale)}";
+        window.saveShopperDetailsURL = "${URLUtils.https('Adyen-SaveExpressShopperDetails')}";
+        window.returnUrl = "${URLUtils.https('Checkout-Begin', 'stage', 'payment')}";
+        window.getExpressPaymentMethodsURL = "${URLUtils.https('Adyen-GetExpressPaymentMethods')}";
+
+        var amazonCheckoutSessionId ="${AdyenHelper.encodeHtml(request.getHttpQueryString().split("=").pop())}";
+        window.amazonCheckoutSessionId = amazonCheckoutSessionId;
+
+        window.Configuration = {
+          locale: '${localeHelper.getShopperLocale(request.locale)}',
+          clientKey: "${AdyenConfigs.getAdyenClientKey()}",
+          environment: "${AdyenConfigs.getAdyenEnvironment()}",
+          countryCode: '${localeHelper.getCountryCode(request.locale)}',
+        };
+        window.basketAmount = "${AdyenHelper.getBasketAmount()}".replace(/&quot;/g, '\"');
+        window.adyenClientKey = "${AdyenConfigs.getAdyenClientKey()}";
+    </script>
+    <isscript>
+        var assets = require('*/cartridge/scripts/assets.js');
+        assets.addJs('/js/adyen/express/paymentMethods/amazonpay/amazonPayExpressPart2.js');
+    </isscript>
+    <input id="adyenStateData" type="hidden" name="${adyenPaymentFields.adyenStateData.htmlName}"/>
+    <div id="amazonPayAddressDetails">
+        <div class="addressHeaders">
+            <label>${Resource.msg('amazonpay.paymentMethod', 'adyen', null)}</label>
+            <button class="editAddressBtn">${Resource.msg('amazonpay.editButton', 'adyen', null)}</button>
+        </div>
+        <address id="paymentStr"></address>
+        <div class="addressHeaders">
+            <label>${Resource.msg('amazonpay.shippingAddress', 'adyen', null)}</label>
+            <button class="editAddressBtn">${Resource.msg('amazonpay.editButton', 'adyen', null)}</button>
+        </div>
+        <address id="address"></address>
+    </div>
+
+    <div id="amazon-container"></div>
+    <iselse>
+        <isinclude template="adyen/adyenExpressMetadata" />
+        <div class="mb-sm-3">
+            <a
+                href="${URLUtils.https('Checkout-Begin')}"
+                class="btn btn-primary btn-block checkout-btn ${pdict.valid.error ? 'disabled' : ''}"
+                role="button">
+            ${Resource.msg('button.checkout', 'cart', null)}
+            </a>
+        </div>
+        <isif condition="${AdyenConfigs.areExpressPaymentsEnabled()}">
+            <div id="express-container"></div>
+            <script src="${URLUtils.httpsStatic('/js/cartExpressPayments.js')}" type="text/javascript"></script>
+        </isif>
+    </iselse>
+</isif>

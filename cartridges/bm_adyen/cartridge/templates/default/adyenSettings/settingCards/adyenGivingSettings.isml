@@ -1,0 +1,33 @@
+<iscontent type="text/html" charset="UTF-8" compact="true">
+<isset name="AdyenConfigs" value="${require('*/cartridge/adyen/utils/adyenConfigs')}" scope="page"/>
+<div id="adyenGivingSettings" class="card bg-white mt-4 adyen-giving">
+   <script>
+      window.successImage = "${URLUtils.staticURL('icons/checkmark-circle-fill.svg')}";
+      window.logoValueField = "${AdyenConfigs.getAdyenGivingLogoUrl() || ''}";
+      window.backgroundValueField = "${AdyenConfigs.getAdyenGivingBackgroundUrl() || ''}";
+   </script>
+   <div class="card-body">
+      <h5 class="card-title mb-0">Adyen Giving <small class="text-secondary">(optional)</small></h5>
+      <h7 class="card-subtitle">
+         <div class="first-subtitle">
+            Give your shoppers the option to donate to a charity during their payment.
+            Not sure how to register to Adyen Giving? Contact your <a class="text-primary" href="https://www.adyen.com/contact" target="_blank">Account Manager or Support</a>.
+         </div>
+      </h7>
+      <div class="mt-2">
+         <div class="form-group">
+            <label class="form-title mb-0" for="adyenGivingButton">Adyen Giving</label>
+            <div class="row">
+               <div class="col-sm-9">
+                  <small id="adyenGivingButtonHelp" class="form-text mb-1">&#8198;Enable Adyen Giving.</small>
+               </div>
+               <div class="switch-button">
+                  <div class="form-check form-switch">
+                     <input class="form-check-input" type="checkbox" name="AdyenGiving_enabled" id="flexSwitchCheckChecked" data-bs-toggle="collapse" data-bs-target=".adyen-giving-settings" ${AdyenConfigs.getAdyenGivingEnabled() ? 'checked': 'unchecked'}>
+                  </div>
+               </div>
+            </div>
+         </div>
+      </div>
+   </div>
+</div>

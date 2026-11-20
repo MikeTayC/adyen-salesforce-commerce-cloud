@@ -1,0 +1,190 @@
+"use strict";
+
+var Resource = require('dw/web/Resource');
+var Site = require('dw/system/Site');
+var adyenCurrentSite = Site.getCurrent();
+function getCustomPreference(field) {
+  var customPreference = null;
+  if (adyenCurrentSite && adyenCurrentSite.getCustomPreferenceValue(field)) {
+    customPreference = adyenCurrentSite.getCustomPreferenceValue(field);
+  }
+  return customPreference;
+}
+function setCustomPreference(field, value) {
+  var customPreference = null;
+  if (adyenCurrentSite) {
+    adyenCurrentSite.setCustomPreferenceValue(field, value);
+    customPreference = adyenCurrentSite.getCustomPreferenceValue(field);
+  }
+  return customPreference;
+}
+var adyenConfigsObj = {
+  setCustomPreference,
+  getAdyenEnvironment() {
+    return getCustomPreference('Adyen_Mode').value;
+  },
+  setAdyenEnvironment(value) {
+    return setCustomPreference('Adyen_Mode', value).value;
+  },
+  getAdyenMerchantAccount() {
+    return getCustomPreference('Adyen_merchantCode');
+  },
+  getAdyenNotificationUser() {
+    return getCustomPreference('Adyen_notification_user');
+  },
+  getAdyenNotificationPassword() {
+    return getCustomPreference('Adyen_notification_password');
+  },
+  getAdyenHmacKey() {
+    return getCustomPreference('Adyen_Hmac_Key');
+  },
+  getAdyenRecurringPaymentsEnabled() {
+    return getCustomPreference('AdyenOneClickEnabled');
+  },
+  getKlarnaInlineWidgetEnabled() {
+    return getCustomPreference('Adyen_klarnaWidget');
+  },
+  getAdyenInstallmentsEnabled() {
+    return getCustomPreference('AdyenInstallments_enabled');
+  },
+  getCreditCardInstallments() {
+    return getCustomPreference('AdyenCreditCardInstallments');
+  },
+  getSystemIntegratorName() {
+    return getCustomPreference('Adyen_IntegratorName');
+  },
+  getAdyenDefaultLocale() {
+    return getCustomPreference('Adyen_DefaultLocale');
+  },
+  getAdyenClientKey() {
+    return getCustomPreference('Adyen_ClientKey');
+  },
+  getLivePrefix() {
+    return getCustomPreference('Adyen_LivePrefix');
+  },
+  getGoogleMerchantID() {
+    return getCustomPreference('Adyen_GooglePayMerchantID');
+  },
+  getRatePayMerchantID() {
+    return getCustomPreference('AdyenRatePayID');
+  },
+  getApplePayDomainAssociation() {
+    return getCustomPreference('Adyen_ApplePay_DomainAssociation');
+  },
+  getAdyenStoreId() {
+    return getCustomPreference('Adyen_StoreId');
+  },
+  getAdyenActiveStoreId() {
+    return getCustomPreference('Adyen_SelectedStoreID');
+  },
+  getAdyenApiKey() {
+    return getCustomPreference('Adyen_API_Key');
+  },
+  getAdyenFrontendRegion() {
+    return getCustomPreference('Adyen_Frontend_Region').value;
+  },
+  getAdyenPosRegion() {
+    return getCustomPreference('Adyen_Pos_Region').value;
+  },
+  getAdyenTokenisationEnabled() {
+    return getCustomPreference('AdyenTokenisationEnabled');
+  },
+  getAdyenBasketFieldsEnabled() {
+    return getCustomPreference('AdyenBasketFieldsEnabled');
+  },
+  getAdyenLevel23DataEnabled() {
+    return getCustomPreference('AdyenLevel23DataEnabled');
+  },
+  getAdyenLevel23CommodityCode() {
+    return getCustomPreference('AdyenLevel23_CommodityCode');
+  },
+  getAdyenSalePaymentMethods() {
+    var adyenSalePaymentMethods = getCustomPreference('AdyenSalePaymentMethods');
+    return adyenSalePaymentMethods ? adyenSalePaymentMethods.replace(/\s/g, '').toString().split(',') : [];
+  },
+  getAdyenGivingEnabled() {
+    return getCustomPreference('AdyenGiving_enabled');
+  },
+  areExpressPaymentsEnabled() {
+    return this.isApplePayExpressEnabled() || this.isAmazonPayExpressEnabled() || this.isPayPalExpressEnabled() || this.isGooglePayExpressEnabled();
+  },
+  areExpressPaymentsEnabledOnPdp() {
+    return this.isApplePayExpressOnPdpEnabled() || this.isGooglePayExpressOnPdpEnabled() || this.isPayPalExpressOnPdpEnabled();
+  },
+  areExpressPaymentsEnabledOnShipping() {
+    return this.isApplePayExpressOnShippingPageEnabled() || this.isGooglePayExpressOnShippingPageEnabled() || this.isPayPalExpressOnShippingPageEnabled();
+  },
+  isApplePayExpressEnabled() {
+    return getCustomPreference('ApplePayExpress_Enabled');
+  },
+  isApplePayExpressOnPdpEnabled() {
+    return getCustomPreference('ApplePayExpress_Pdp_Enabled');
+  },
+  isApplePayExpressOnShippingPageEnabled() {
+    return getCustomPreference('ApplePayExpress_ShippingPage_Enabled');
+  },
+  isGooglePayExpressEnabled() {
+    return getCustomPreference('GooglePayExpress_Enabled');
+  },
+  isGooglePayExpressOnPdpEnabled() {
+    return getCustomPreference('GooglePayExpress_Pdp_Enabled');
+  },
+  isGooglePayExpressOnShippingPageEnabled() {
+    return getCustomPreference('GooglePayExpress_ShippingPage_Enabled');
+  },
+  isAmazonPayExpressEnabled() {
+    return getCustomPreference('AmazonPayExpress_Enabled');
+  },
+  isPayPalExpressEnabled() {
+    return getCustomPreference('PayPalExpress_Enabled');
+  },
+  isPayPalExpressOnPdpEnabled() {
+    return getCustomPreference('PayPalExpress_Pdp_Enabled');
+  },
+  isPayPalExpressOnShippingPageEnabled() {
+    return getCustomPreference('PayPalExpress_ShippingPage_Enabled');
+  },
+  isPayPalExpressReviewPageEnabled() {
+    return getCustomPreference('PayPalExpress_ReviewPage_Enabled');
+  },
+  getExpressPaymentsOrder() {
+    return getCustomPreference('ExpressPayments_order');
+  },
+  getAdyenGivingDonationAmounts() {
+    return getCustomPreference('AdyenGiving_donationAmounts');
+  },
+  getAdyenGivingCharityAccount() {
+    return getCustomPreference('AdyenGiving_charityAccount');
+  },
+  getAdyenGivingCharityName() {
+    return getCustomPreference('AdyenGiving_charityName');
+  },
+  getAdyenGivingCharityDescription() {
+    return getCustomPreference('AdyenGiving_charityDescription');
+  },
+  getAdyenGivingCharityWebsite() {
+    return getCustomPreference('AdyenGiving_charityUrl');
+  },
+  getAdyenGivingBackgroundUrl() {
+    var optionalChainValue = getCustomPreference('AdyenGiving_backgroundUrl');
+    var absURL = optionalChainValue && optionalChainValue.getAbsURL();
+    return absURL;
+  },
+  getAdyenGivingLogoUrl() {
+    var optionalChainValue = getCustomPreference('AdyenGiving_logoUrl');
+    var absURL = optionalChainValue && optionalChainValue.getAbsURL();
+    return absURL;
+  },
+  getAdyenSFRA6Compatibility() {
+    var SFRA6 = 6;
+    var SFRAversion = Resource.msg('global.version.number', 'version', null) || '';
+    return SFRAversion.split('.')[0] >= SFRA6;
+  },
+  getAdyenSFRAVersion() {
+    return Resource.msg('global.version.number', 'version', null) || 'unknown';
+  },
+  isAdyenAnalyticsEnabled() {
+    return getCustomPreference('AdyenAnalytics_Enabled');
+  }
+};
+module.exports = adyenConfigsObj;

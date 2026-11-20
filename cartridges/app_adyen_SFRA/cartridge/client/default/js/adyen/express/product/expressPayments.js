@@ -1,0 +1,245 @@
+const {
+  APPLE_PAY,
+  GOOGLE_PAY,
+  PAY_WITH_GOOGLE,
+  PAYPAL
+} = require('../../../../../../config/constants');
+const {
+  getExpressPaymentMethods,
+  calculateProductPrice
+} = require('../../commons/index');
+const {
+  httpClient
+} = require('../../commons/httpClient');
+const {
+  ApplePay,
+  GooglePay,
+  Paypal
+} = require('../paymentMethods');
+function findCurrentProductIdFromDom() {
+  const pidFromAttr = document.querySelector('[data-pid]')?.getAttribute('data-pid');
+  if (pidFromAttr) return pidFromAttr;
+  return document.querySelector('#selected-express-product')?.getAttribute('data-pid');
+}
+function buildFallbackProduct() {
+  const id = findCurrentProductIdFromDom();
+  const readyToOrderData = $('.global-availability').data('ready-to-order');
+  const availableData = $('.global-availability').data('available');
+  return {
+    id,
+    readyToOrder: readyToOrderData !== undefined ? readyToOrderData : true,
+    available: availableData !== undefined ? availableData : true
+  };
+}
+async function fetchInitialProductVariation(dataUrl) {
+  return httpClient({
+    url: dataUrl,
+    method: 'GET'
+  });
+}
+async function renderInitialExpress(paymentMethodsResponse) {
+  $.spinner().start();
+  const dataUrl = $('.quantity-select').find('option:selected').data('url');
+  if (dataUrl) {
+    const productVariation = await fetchInitialProductVariation(dataUrl);
+    if (productVariation?.product) {
+      $('body').trigger('product:renderExpressPaymentContainer', {
+        product: productVariation.product,
+        paymentMethodsResponse
+      });
+      $.spinner().stop();
+      return;
+    }
+  }
+  const fallbackProduct = buildFallbackProduct();
+  if (fallbackProduct.id) {
+    $('body').trigger('product:renderExpressPaymentContainer', {
+      product: fallbackProduct,
+      paymentMethodsResponse
+    });
+  }
+  $.spinner().stop();
+}
+function getProductForm(product) {
+  const $productInputEl = document.createElement('input');
+  $productInputEl.setAttribute('id', 'selected-express-product');
+  $productInputEl.setAttribute('name', 'selected-express-product');
+  $productInputEl.setAttribute('type', 'hidden');
+  $productInputEl.setAttribute('data-pid', `${product.id}`);
+  $productInputEl.setAttribute('data-basketId', '');
+  $productInputEl.value = JSON.stringify(product);
+  const $productForm = document.createElement('form');
+  $productForm.setAttribute('id', 'express-product-form');
+  $productForm.setAttribute('name', 'express-product-form');
+  $productForm.append($productInputEl);
+  return $productForm;
+}
+function getPaymentMethodConfig(adyenPaymentMethods, paymentMethodType) {
+  return adyenPaymentMethods?.paymentMethods.find(pm => paymentMethodType.indexOf(pm.type) > -1)?.configuration;
+}
+async function getProductPrice(productId, quantity = 1) {
+  const response = await calculateProductPrice(productId, quantity);
+  const totalAmount = response?.totalAmount;
+  if (response?.success && Number.isSafeInteger(totalAmount?.minorUnitValue) && totalAmount.minorUnitValue >= 0) {
+    return {
+      value: totalAmount.minorUnitValue,
+      currency: totalAmount.currencyCode
+    };
+  }
+  return null;
+}
+function getProductId() {
+  return document.querySelector('[data-pid]')?.getAttribute('data-pid') || document.querySelector('#selected-express-product')?.getAttribute('data-pid');
+}
+function getProductQuantity() {
+  return document.querySelector('[name="Quantity"]')?.value || document.querySelector('.quantity-select')?.value || 1;
+}
+async function calculateInitialAmount(currency) {
+  const productId = getProductId();
+  const quantity = getProductQuantity();
+  const initialAmount = {
+    value: 0,
+    currency
+  };
+  if (productId) {
+    const productPrice = await getProductPrice(productId, quantity);
+    if (productPrice) {
+      initialAmount.value = productPrice.value;
+    }
+  }
+  return initialAmount;
+}
+function renderApplePayButton() {
+  $('body').on(`product:render${APPLE_PAY}Button`, async (e, response) => {
+    const {
+      paymentMethodsResponse: {
+        AdyenPaymentMethods,
+        applicationInfo,
+        adyenTranslations,
+        amount: {
+          currency
+        }
+      } = {},
+      button
+    } = response;
+    const applePayConfig = getPaymentMethodConfig(AdyenPaymentMethods, APPLE_PAY);
+    if (!applePayConfig) {
+      return;
+    }
+    const initialAmount = await calculateInitialAmount(currency);
+    const applePay = new ApplePay(applePayConfig, applicationInfo, adyenTranslations, true, initialAmount);
+    const applePayComponent = await applePay.getComponent();
+    // getComponent resolves to null when Apple Pay is not available on the device
+    if (!applePayComponent) {
+      return;
+    }
+    applePayComponent.mount(button);
+  });
+}
+function renderGooglePayButton() {
+  $('body').on(`product:render${GOOGLE_PAY}Button`, async (e, response) => {
+    const {
+      paymentMethodsResponse: {
+        AdyenPaymentMethods,
+        applicationInfo,
+        adyenTranslations,
+        amount: {
+          currency
+        }
+      } = {},
+      button
+    } = response;
+    const googlePayConfig = getPaymentMethodConfig(AdyenPaymentMethods, [GOOGLE_PAY, PAY_WITH_GOOGLE]);
+    if (!googlePayConfig) {
+      return;
+    }
+    const initialAmount = {
+      value: 0,
+      currency
+    };
+    const googlePay = new GooglePay(googlePayConfig, applicationInfo, adyenTranslations, true, initialAmount);
+    const googlePayComponent = await googlePay.getComponent();
+    googlePayComponent.mount(button);
+  });
+}
+function renderPaypalButton() {
+  $('body').on(`product:render${PAYPAL}Button`, async (e, response) => {
+    const {
+      paymentMethodsResponse: {
+        AdyenPaymentMethods,
+        applicationInfo,
+        adyenTranslations,
+        amount: {
+          currency
+        }
+      } = {},
+      button
+    } = response;
+    const paypalConfig = getPaymentMethodConfig(AdyenPaymentMethods, PAYPAL);
+    if (!paypalConfig) {
+      return;
+    }
+    const initialAmount = await calculateInitialAmount(currency);
+    const paypal = new Paypal(paypalConfig, applicationInfo, adyenTranslations, true, initialAmount);
+    const paypalComponent = await paypal.getComponent();
+    paypalComponent.mount(button);
+  });
+}
+function getExpressPaymentButtons(paymentMethodsResponse, product) {
+  const {
+    pdpExpressMethods
+  } = paymentMethodsResponse;
+  return pdpExpressMethods.map(pm => {
+    const $container = document.createElement('div');
+    $container.setAttribute('id', `${pm}-pdp`);
+    $container.setAttribute('class', `expressComponent ${pm}`);
+    $container.setAttribute('data-method', `${pm}`);
+    $container.setAttribute('data-pid', `${product.id}`);
+    $container.setAttribute('style', `padding:0`);
+    return $container;
+  });
+}
+function renderExpressPaymentContainer() {
+  $('body').on('product:renderExpressPaymentContainer', (e, response) => {
+    const {
+      product = {},
+      paymentMethodsResponse
+    } = response;
+    const $expressPaymentButtonsContainer = document.getElementById('express-payment-buttons');
+    if (product.readyToOrder && product.available && paymentMethodsResponse?.pdpExpressMethods?.length) {
+      const expressPaymentButtons = getExpressPaymentButtons(paymentMethodsResponse, product);
+      const $productForm = getProductForm(product);
+      $expressPaymentButtonsContainer.replaceChildren(...expressPaymentButtons, $productForm);
+      expressPaymentButtons.forEach(button => {
+        const expressType = button.getAttribute('data-method');
+        $('body').trigger(`product:render${expressType}Button`, {
+          paymentMethodsResponse,
+          button
+        });
+      });
+    } else {
+      $expressPaymentButtonsContainer.replaceChildren();
+    }
+  });
+}
+async function init() {
+  if (window.areExpressPaymentsEnabledOnPdp === 'true') {
+    const paymentMethodsResponse = await getExpressPaymentMethods();
+    $('body').on('product:updateAddToCart', (e, response) => {
+      $('body').trigger('product:renderExpressPaymentContainer', {
+        product: response.product,
+        paymentMethodsResponse
+      });
+    });
+    $(document).ready(async () => {
+      await renderInitialExpress(paymentMethodsResponse);
+    });
+  }
+}
+module.exports = {
+  init,
+  renderExpressPaymentContainer,
+  renderApplePayButton,
+  renderGooglePayButton,
+  renderPaypalButton
+};

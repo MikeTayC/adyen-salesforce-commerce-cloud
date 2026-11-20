@@ -1,0 +1,112 @@
+<iscontent type="text/html"/>
+<isset name="AdyenHelper" value="${require('*/cartridge/adyen/utils/adyenHelper')}" scope="pdict"/>
+<isset name="adyenKlarnaWidgetEnabled" value="${pdict.AdyenConfigs.getKlarnaInlineWidgetEnabled()}" scope="page"/>
+<isset name="adyenRecurringPaymentsEnabled" value="${pdict.AdyenConfigs.getAdyenRecurringPaymentsEnabled()}" scope="page"/>
+<isset name="adyenTokenisationEnabled" value="${pdict.AdyenConfigs.getAdyenTokenisationEnabled() === true}" scope="page"/>
+<isset name="AdyenConstants" value="${require('*/cartridge/adyen/config/constants')}" scope="page"/>
+<isset name="localeHelper" value="${require('*/cartridge/adyen/utils/localeHelper')}" scope="page"/>
+<script src="https://pay.google.com/gp/p/js/pay.js"></script>
+<isset name="ShowConfirmationPaymentFromComponent" value="${URLUtils.https('Adyen-ShowConfirmationPaymentFromComponent')}" scope="page"/>
+
+<link rel="stylesheet" type="text/css" href="${pdict.AdyenHelper.getCheckoutCSS()}"/>
+<script src="${pdict.AdyenHelper.getCheckoutUrl()}" type="text/javascript"></script>
+<script>
+      window.Configuration = {
+          locale: '${localeHelper.getShopperLocale(request.locale)}',
+          clientKey: '${pdict.adyen.clientKey}',
+          environment: '${pdict.adyen.environment}',
+          countryCode: '${localeHelper.getCountryCode(request.locale)}',
+      };
+      window.adyenClientKey = '${pdict.adyen.adyenClientKey}';
+      window.returnURL = "${URLUtils.https('Checkout-Begin', 'stage', 'payment')}";
+      window.paymentFromComponentURL = "${URLUtils.https('Adyen-PaymentFromComponent')}";
+      window.resultCodeAuthorised = '${AdyenConstants.RESULTCODES.AUTHORISED}';
+      window.paymentsDetailsURL = "${URLUtils.https('Adyen-PaymentsDetails')}";
+      window.ShowConfirmationPaymentFromComponent = "${ShowConfirmationPaymentFromComponent}";
+      window.klarnaWidgetEnabled = ${adyenKlarnaWidgetEnabled};
+      window.adyenRecurringPaymentsEnabled = ${adyenRecurringPaymentsEnabled};
+      window.getPaymentMethodsURL = "${URLUtils.https('Adyen-GetPaymentMethods')}";
+      window.getConnectedTerminalsURL = "${URLUtils.https('Adyen-GetConnectedTerminals')}";
+      window.checkBalanceUrl = "${URLUtils.https('Adyen-CheckBalance')}";
+      window.partialPaymentsOrderUrl = "${URLUtils.https('Adyen-PartialPaymentsOrder')}";
+      window.partialPaymentUrl = "${URLUtils.https('Adyen-partialPayment')}";
+      window.cancelPartialPaymentOrderUrl = "${URLUtils.https('Adyen-CancelPartialPaymentOrder')}";
+      window.getBasketAmountUrl = "${URLUtils.https('Adyen-GetBasketAmount')}";
+      window.fetchGiftCardsUrl = "${URLUtils.https('Adyen-fetchGiftCards')}";
+      window.activeTerminalApiStores = '${pdict.AdyenConfigs.getAdyenActiveStoreId()}';
+      window.sfra6Compatibility = ${pdict.AdyenConfigs.getAdyenSFRA6Compatibility()};
+      
+      window.remainingAmountGiftCardResource = "${Resource.msg('remainingAmount.giftCard', 'adyen', null)}";
+      window.discountedAmountGiftCardResource = "${Resource.msg('discountedAmount.giftCard', 'adyen', null)}";
+      window.deductedBalanceGiftCardResource = "${Resource.msg('deductedBalance.giftCard', 'adyen', null)}";
+      window.cancelGiftCardResource = "${Resource.msg('cancel.giftCard', 'adyen', null)}";
+
+      window.giftCardWarningMessage = "${Resource.msg('message.error.giftcard.removed', 'error', null)}";
+      window.giftCardErrorMessage = "${Resource.msg('message.error.giftcard', 'error', null)}";
+      window.removeGiftCardButtonText = "${Resource.msg('remove.giftCard', 'adyen', null)}";
+</script>
+
+<isif condition="${request.getHttpQueryString() && request.getHttpQueryString().indexOf('amazonCheckoutSessionId') > -1} ">
+    <isscript>
+        var assets = require('*/cartridge/scripts/assets.js');
+        assets.addJs('/js/adyen/checkout/amazonPayCheckout.js');
+        assets.addCss('/css/adyenGiftcards.css');
+        assets.addCss('/css/adyenCss.css');
+    </isscript>
+
+    <script>
+        var amazonCheckoutSessionId = "${pdict.AdyenHelper.encodeHtml(request.getHttpQueryString().split("=").pop())}";
+        window.amazonCheckoutSessionId = amazonCheckoutSessionId;
+    </script>
+     <input id="adyenStateData" type="hidden" name="${adyenPaymentFields.adyenStateData.htmlName}"/>
+
+    <isinclude template="adyenActionModal" />
+
+<iselse>
+    <script>
+         window.installments = '${pdict.adyen.installments}';
+         window.googleMerchantID = '${pdict.adyen.googleMerchantID}';
+         window.merchantAccount = '${pdict.adyen.merchantAccount}';
+         window.customerEmail = '${pdict.AdyenHelper.getCustomerEmail()}';
+         var showStoreDetails = ${customer.authenticated && adyenRecurringPaymentsEnabled};
+         window.showCashAppStoreDetails = ${adyenTokenisationEnabled};
+    </script>
+
+     <isset name="AdyenHelper" value="${require('*/cartridge/adyen/utils/adyenHelper')}" scope="pdict"/>
+     <isset name="ratePayValues" value="${pdict.AdyenHelper.getRatePayID()}" scope="page"/>
+
+     <input id="adyenPaymentMethodName" type="hidden" name="adyenPaymentMethod"/>
+     <input id="adyenStateData" type="hidden" name="${adyenPaymentFields.adyenStateData.htmlName}"/>
+     <input id="adyenPartialPaymentsOrder" type="hidden" name="${adyenPaymentFields.adyenPartialPaymentsOrder.htmlName}"/>
+     <input type="text" class="form-control cardNumber" style="display:none" id="cardNumber" name="${creditFields.cardNumber.htmlName}">
+     <input type="hidden" class="form-control" id="cardType" name="${creditFields.cardType.htmlName}">
+
+     <input id="adyenIssuerName" type="hidden" name="adyenIssuerName"/>
+     <input id="selectedIssuer" type="hidden" name="${adyenPaymentFields.issuer.htmlName}"/>
+
+    <ul id="paymentMethodsList" class="payment-methods-container"></ul>
+    <div id="adyenGiftCards" style="display: none">
+        <isinclude template="checkout/billing/adyenGiftCards" />
+    </div>
+
+     <iscomment>
+         Adyen RatePay Device Fingerprint Code
+     </iscomment>
+     <isif condition="${!empty(ratePayValues.ratePayID)}">
+         <script language="JavaScript">
+             var di = {t:'${ratePayValues.sessionID}',v:'${ratePayValues.ratePayID}',l:'Checkout'}
+         </script>
+         <script type="text/javascript" src="https://d.ratepay.com/${ratePayValues.ratePayID}/di.js"></script>
+    </isif>
+     <iscomment>
+         Adyen Generic Device Fingerprint Code
+     </iscomment>
+     <script type="text/javascript" src="https://live.adyen.com/hpp/js/df.js?v=${session.sessionID}"></script>
+     <input id="adyenFingerprint" type="hidden" name="${adyenPaymentFields.adyenFingerprint.htmlName}"/>
+     <script type="text/javascript">
+         dfDo('adyenFingerprint');
+     </script>
+
+</iselse>
+</isif>
+<input type="hidden" id="adyen-token" name="${pdict.csrf.tokenName}" value="${pdict.csrf.token}"/>

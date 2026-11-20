@@ -1,0 +1,244 @@
+"use strict";
+
+/* ### Custom Adyen cartridge start ### */
+var adyenHelpers = require('*/cartridge/adyen/utils/authorizationHelper');
+var AdyenHelper = require('*/cartridge/adyen/utils/adyenHelper');
+var GiftCardsHelper = require('*/cartridge/adyen/utils/giftCardsHelper');
+var constants = require('*/cartridge/adyen/config/constants');
+var {
+  processPayment,
+  isNotAdyen
+} = require('*/cartridge/controllers/middlewares/checkout_services/adyenCheckoutServices');
+var Money = require('dw/value/Money');
+var clearForms = require('*/cartridge/adyen/utils/clearForms');
+var {
+  cancelPartialPaymentOrderHelper
+} = require('*/cartridge/adyen/scripts/partialPayments/cancelPartialPaymentOrder');
+var AdyenLogs = require('*/cartridge/adyen/logs/adyenCustomLogs');
+
+/* ### Custom Adyen cartridge end ### */
+
+function placeOrder(req, res, next) {
+  var BasketMgr = require('dw/order/BasketMgr');
+  var OrderMgr = require('dw/order/OrderMgr');
+  var Resource = require('dw/web/Resource');
+  var Transaction = require('dw/system/Transaction');
+  var URLUtils = require('dw/web/URLUtils');
+  var basketCalculationHelpers = require('*/cartridge/scripts/helpers/basketCalculationHelpers');
+  var hooksHelper = require('*/cartridge/scripts/helpers/hooks');
+  var COHelpers = require('*/cartridge/scripts/checkout/checkoutHelpers');
+  var validationHelpers = require('*/cartridge/scripts/helpers/basketValidationHelpers');
+  var addressHelpers = require('*/cartridge/scripts/helpers/addressHelpers');
+  var currentBasket = BasketMgr.getCurrentBasket();
+  if (!currentBasket) {
+    res.json({
+      error: true,
+      cartError: true,
+      fieldErrors: [],
+      serverErrors: [],
+      redirectUrl: URLUtils.url('Cart-Show').toString()
+    });
+    return next();
+  }
+
+  /* ### Custom Adyen cartridge ### */
+  if (isNotAdyen(currentBasket)) {
+    return next();
+  }
+  /* ### Custom Adyen cartridge ### */
+
+  var validatedProducts = validationHelpers.validateProducts(currentBasket);
+  if (validatedProducts.error) {
+    res.json({
+      error: true,
+      cartError: true,
+      fieldErrors: [],
+      serverErrors: [],
+      redirectUrl: URLUtils.url('Cart-Show').toString()
+    });
+    return next();
+  }
+  if (req.session.privacyCache.get('fraudDetectionStatus')) {
+    res.json({
+      error: true,
+      cartError: true,
+      redirectUrl: URLUtils.url('Error-ErrorCode', 'err', '01').toString(),
+      errorMessage: Resource.msg('error.technical', 'checkout', null)
+    });
+    return next();
+  }
+  var validationOrderStatus = hooksHelper('app.validate.order', 'validateOrder', currentBasket, require('*/cartridge/scripts/hooks/validateOrder').validateOrder);
+  if (validationOrderStatus.error) {
+    res.json({
+      error: true,
+      errorMessage: validationOrderStatus.message
+    });
+    return next();
+  }
+
+  // Check to make sure there is a shipping address
+  if (currentBasket.defaultShipment.shippingAddress === null) {
+    res.json({
+      error: true,
+      errorStage: {
+        stage: 'shipping',
+        step: 'address'
+      },
+      errorMessage: Resource.msg('error.no.shipping.address', 'checkout', null)
+    });
+    return next();
+  }
+
+  // Check to make sure billing address exists
+  if (!currentBasket.billingAddress) {
+    res.json({
+      error: true,
+      errorStage: {
+        stage: 'payment',
+        step: 'billingAddress'
+      },
+      errorMessage: Resource.msg('error.no.billing.address', 'checkout', null)
+    });
+    return next();
+  }
+
+  // Calculate the basket
+  Transaction.wrap(function () {
+    basketCalculationHelpers.calculateTotals(currentBasket);
+  });
+
+  // Re-calculate the payments.
+  var calculatedPaymentTransactionTotal = COHelpers.calculatePaymentTransaction(currentBasket);
+  if (calculatedPaymentTransactionTotal.error) {
+    res.json({
+      error: true,
+      errorMessage: Resource.msg('error.technical', 'checkout', null)
+    });
+    return next();
+  }
+
+  // Check if gift cards were used
+  var giftCardsAdded = currentBasket.custom && currentBasket.custom.adyenGiftCards ? JSON.parse(currentBasket.custom.adyenGiftCards) : null;
+
+  // Creates a new order.
+  var order;
+  if (giftCardsAdded) {
+    var orderNo = currentBasket.custom.adyenGiftCardsOrderNo;
+    order = OrderMgr.createOrder(currentBasket, orderNo);
+  } else {
+    order = COHelpers.createOrder(currentBasket);
+  }
+  if (!order) {
+    session.privacy.orderNo = null;
+    res.json({
+      error: true,
+      errorMessage: Resource.msg('error.technical', 'checkout', null)
+    });
+    return next();
+  }
+
+  /* ### Custom Adyen cartridge start ### */
+  // Cache order number in order to be able to restore cart later
+  req.session.privacyCache.set('currentOrderNumber', order.orderNo);
+  req.session.privacyCache.set('currentOrderToken', order.orderToken);
+  session.privacy.orderNo = order.orderNo;
+
+  // Handles payment authorization
+  var handlePaymentResult = adyenHelpers.handlePayments(order);
+  var mainPaymentInstrument;
+  if (giftCardsAdded) {
+    mainPaymentInstrument = order.getPaymentInstruments(AdyenHelper.getOrderMainPaymentInstrumentType(order))[0];
+    giftCardsAdded.forEach(giftCard => {
+      var divideBy = AdyenHelper.getDivisorForCurrency(mainPaymentInstrument.paymentTransaction.getAmount());
+      var amount = {
+        value: giftCard.remainingAmount.value,
+        currency: giftCard.remainingAmount.currency
+      };
+      var formattedAmount = new Money(amount.value, amount.currency).divide(divideBy);
+      Transaction.wrap(() => {
+        mainPaymentInstrument.paymentTransaction.setAmount(formattedAmount); //update amount from order total to PM total
+      });
+      GiftCardsHelper.createGiftCardPaymentInstrument(giftCard, divideBy, order);
+    });
+  }
+  /* ### Custom Adyen cartridge end ### */
+
+  if (handlePaymentResult.error) {
+    // Cancel partial payment order to refund gift cards if applicable
+    var basketDataCleared = false;
+    if (giftCardsAdded) {
+      try {
+        cancelPartialPaymentOrderHelper(currentBasket);
+        basketDataCleared = true;
+      } catch (error) {
+        AdyenLogs.error_log('Failed to cancel partial payment order on payment failure:', error);
+      }
+    }
+    Transaction.wrap(function () {
+      OrderMgr.failOrder(order, true);
+    });
+    // Clear basket data if not already cleared by the helper
+    if (!basketDataCleared) {
+      clearForms.clearAdyenBasketData(currentBasket);
+    }
+    res.json({
+      error: true,
+      cartError: true,
+      redirectUrl: URLUtils.url('Checkout-Begin', 'stage', 'payment', 'paymentError', Resource.msg('error.payment.not.valid', 'checkout', null)).toString()
+    });
+    this.emit('route:Complete', req, res);
+    return;
+  }
+
+  /* ### Custom Adyen cartridge start ### */
+  var cbEmitter = route => this.emit(route, req, res);
+  if (handlePaymentResult.action && (handlePaymentResult.action || {}).type !== constants.ACTIONTYPES.VOUCHER) {
+    return processPayment(order, handlePaymentResult, req, res, cbEmitter);
+  }
+  /* ### Custom Adyen cartridge end ### */
+
+  var fraudDetectionStatus = hooksHelper('app.fraud.detection', 'fraudDetection', currentBasket, require('*/cartridge/scripts/hooks/fraudDetection').fraudDetection);
+  if (fraudDetectionStatus.status === 'fail') {
+    Transaction.wrap(function () {
+      OrderMgr.failOrder(order, true);
+    });
+
+    // fraud detection failed
+    req.session.privacyCache.set('fraudDetectionStatus', true);
+    res.json({
+      error: true,
+      cartError: true,
+      redirectUrl: URLUtils.url('Error-ErrorCode', 'err', fraudDetectionStatus.errorCode).toString(),
+      errorMessage: Resource.msg('error.technical', 'checkout', null)
+    });
+    return next();
+  }
+  if (req.currentCustomer.addressBook) {
+    // save all used shipping addresses to address book of the logged in customer
+    var allAddresses = addressHelpers.gatherShippingAddresses(order);
+    allAddresses.forEach(function (address) {
+      if (!addressHelpers.checkIfAddressStored(address, req.currentCustomer.addressBook.addresses)) {
+        addressHelpers.saveAddress(address, req.currentCustomer, addressHelpers.generateAddressName(address));
+      }
+    });
+  }
+  clearForms.clearForms();
+  if (mainPaymentInstrument) {
+    clearForms.clearPaymentTransactionData(mainPaymentInstrument);
+    clearForms.clearAdyenData(mainPaymentInstrument);
+  }
+  // Reset usingMultiShip after successful Order placement
+  req.session.privacyCache.set('usingMultiShipping', false);
+
+  // TODO: Exposing a direct route to an Order, without at least encoding the orderID
+  //  is a serious PII violation.  It enables looking up every customers orders, one at a
+  //  time.
+  res.json({
+    error: false,
+    orderID: order.orderNo,
+    orderToken: order.orderToken,
+    continueUrl: URLUtils.url('Order-Confirm').toString()
+  });
+  this.emit('route:Complete', req, res);
+}
+module.exports = placeOrder;

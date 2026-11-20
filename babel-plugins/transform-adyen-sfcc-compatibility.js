@@ -100,78 +100,53 @@ module.exports = function transformAdyenSfccCompatibility({
      * null, '', 0, and false are preserved.
      */
     function transformDefaultParameters(path) {
-        const initializationStatements = [];
-        let changed = false;
+        const parameterInitializers = [];
 
-        path.node.params = path.node.params.map((parameter) => {
-            if (!t.isAssignmentPattern(parameter)) {
-                return parameter;
+        path.node.params = path.node.params.map((param) => {
+            if (!t.isAssignmentPattern(param)) {
+                return param;
             }
 
-            if (!t.isIdentifier(parameter.left)) {
-                throw path.buildCodeFrameError('Default parameters using destructuring are not ' + 'supported by the readable parameter transform.');
-            }
+            if (t.isObjectPattern(param.left) || t.isArrayPattern(param.left)) {
+                const parameterIdentifier = path.scope.generateUidIdentifier('parameter');
 
-            changed = true;
-
-            const identifier = clone(parameter.left);
-            const defaultValue = clone(parameter.right);
-
-            /*
-             * An explicit undefined default requires no replacement
-             * statement after the AssignmentPattern is removed.
-             *
-             *     function example(value = undefined) {}
-             *
-             * becomes:
-             *
-             *     function example(value) {}
-             */
-            if (!isRemovableParameterDefault(defaultValue)) {
-                initializationStatements.push(
-                    t.ifStatement(
-                        createUndefinedCheck(identifier),
-                        t.blockStatement([t.expressionStatement(t.assignmentExpression('=', clone(identifier), defaultValue))])
-                    )
+                parameterInitializers.push(
+                    t.variableDeclaration('var', [
+                        t.variableDeclarator(
+                            t.cloneNode(param.left),
+                            t.conditionalExpression(
+                                t.binaryExpression('===', t.cloneNode(parameterIdentifier), t.identifier('undefined')),
+                                t.cloneNode(param.right),
+                                t.cloneNode(parameterIdentifier)
+                            )
+                        )
+                    ])
                 );
+
+                return parameterIdentifier;
             }
 
-            return identifier;
+            if (!t.isIdentifier(param.left)) {
+                throw path.buildCodeFrameError('Unsupported default parameter pattern.');
+            }
+
+            parameterInitializers.push(
+                t.ifStatement(
+                    t.binaryExpression('===', t.cloneNode(param.left), t.identifier('undefined')),
+                    t.blockStatement([
+                        t.expressionStatement(
+                            t.assignmentExpression('=', t.cloneNode(param.left), t.cloneNode(param.right))
+                        )
+                    ])
+                )
+            );
+
+            return param.left;
         });
 
-        if (!changed || initializationStatements.length === 0) {
-            return;
+        if (parameterInitializers.length) {
+            path.get('body').unshiftContainer('body', parameterInitializers);
         }
-
-        /*
-         * A concise arrow function has an expression body, so convert it
-         * into a block before inserting the initialization statements.
-         *
-         * Example:
-         *
-         *     (value = 'default') => value
-         *
-         * becomes:
-         *
-         *     (value) => {
-         *         if (value === undefined) {
-         *             value = 'default';
-         *         }
-         *
-         *         return value;
-         *     }
-         */
-        if (path.isArrowFunctionExpression() && !t.isBlockStatement(path.node.body)) {
-            path.node.body = t.blockStatement([...initializationStatements, t.returnStatement(clone(path.node.body))]);
-
-            return;
-        }
-
-        if (!t.isBlockStatement(path.node.body)) {
-            throw path.buildCodeFrameError('Cannot insert readable default-parameter logic into ' + 'a function without a block body.');
-        }
-
-        path.node.body.body.unshift(...initializationStatements);
     }
 
 

@@ -5,7 +5,7 @@ const { APPLE_PAY } = require('../../../../../../../config/constants');
 const { initializeCheckout } = require('../../initializeCheckout');
 const { createTemporaryBasket } = require('../../../commons');
 class ApplePay {
-    constructor(config, applicationInfo, adyenTranslations, isExpressPdp, initialAmount) {
+    constructor(config, brands, applicationInfo, adyenTranslations, isExpressPdp, initialAmount) {
         const { basketAmount, showConfirmationAction, shippingMethodsUrl, selectShippingMethodUrl, paymentFromComponentURL } = window;
         this.store = store;
         this.helpers = helpers;
@@ -19,6 +19,7 @@ class ApplePay {
         this.selectShippingMethodUrl = selectShippingMethodUrl;
         this.applicationInfo = applicationInfo;
         this.config = config;
+        this.brands = brands;
         this.customerData = null;
         this.billingData = null;
         this.translations = adyenTranslations;
@@ -204,7 +205,7 @@ class ApplePay {
             if (newCalculation?.grandTotalAmount) {
                 const shippingMethodsStructured = shippingMethodsData.shippingMethods.map((sm) => ({
                     label: sm.displayName,
-                    detail: sm.description,
+                    detail: sm.description || '',
                     identifier: sm.ID,
                     amount: `${sm.shippingCost.value}`
                 }));
@@ -246,6 +247,8 @@ class ApplePay {
     getConfig() {
         return {
             configuration: this.config,
+            // Adyen Web maps brands to Apple Pay supportedNetworks; without them it falls back to its default networks
+            brands: this.brands,
             showPayButton: this.showPayButton,
             amount: this.amount,
             isExpress: this.isExpress,

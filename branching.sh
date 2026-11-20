@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 local_branch_name="$(git rev-parse --abbrev-ref HEAD)"
 
-valid_branch_regex='^(feature|bugfix|improvement|library|prerelease|release|hotfix)\/.'
+valid_branch_regex='^(feature|bugfix|improvement|library|prerelease|release|hotfix|readable)\/.'
 
 message="There is something wrong with your branch name. Branch names in this project must start with feature|bugfix|improvement|library|prerelease|release|hotfix followed by /. Example: feature/name-of-the-feature."
 

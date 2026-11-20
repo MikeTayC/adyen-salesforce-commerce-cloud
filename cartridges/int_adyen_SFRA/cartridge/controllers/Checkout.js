@@ -1,11 +1,9 @@
-"use strict";
+'use strict';
 
 var server = require('server');
 var csrfProtection = require('*/cartridge/scripts/middleware/csrf');
 var consentTracking = require('*/cartridge/scripts/middleware/consentTracking');
-var {
-  checkout
-} = require('*/cartridge/controllers/middlewares/index');
+var { checkout } = require('*/cartridge/controllers/middlewares/index');
 server.extend(module.superModule);
 
 /*

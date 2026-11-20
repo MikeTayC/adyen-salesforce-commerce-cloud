@@ -1,4 +1,4 @@
-"use strict";
+'use strict';
 
 var authorize = require('*/cartridge/adyen/scripts/hooks/payment/processor/middlewares/authorize');
 var handle = require('*/cartridge/adyen/scripts/hooks/payment/processor/middlewares/handle');
@@ -7,10 +7,10 @@ var posAuthorize = require('*/cartridge/adyen/scripts/hooks/payment/processor/mi
 var processForm = require('*/cartridge/adyen/scripts/hooks/payment/processor/middlewares/processForm');
 var savePaymentInformation = require('*/cartridge/adyen/scripts/hooks/payment/processor/middlewares/savePaymentInformation');
 module.exports = {
-  authorize,
-  handle,
-  posHandle,
-  posAuthorize,
-  processForm,
-  savePaymentInformation
+    authorize,
+    handle,
+    posHandle,
+    posAuthorize,
+    processForm,
+    savePaymentInformation
 };

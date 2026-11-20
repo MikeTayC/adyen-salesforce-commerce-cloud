@@ -1,22 +1,17 @@
-"use strict";
+'use strict';
 
 var Order = require('dw/order/Order');
 var OrderMgr = require('dw/order/OrderMgr');
 var AdyenLogs = require('*/cartridge/adyen/logs/adyenCustomLogs');
-var {
-  isWebhookSuccessful
-} = require('*/cartridge/utils/webhookUtils');
-function handle({
-  order,
-  customObj
-}) {
-  if (isWebhookSuccessful(customObj)) {
-    order.setPaymentStatus(Order.PAYMENT_STATUS_NOTPAID);
-    order.trackOrderChange('Capture failed, cancelling order');
-    OrderMgr.cancelOrder(order);
-  }
-  AdyenLogs.info_log(`Capture failed for order ${order.orderNo}`);
+var { isWebhookSuccessful } = require('*/cartridge/utils/webhookUtils');
+function handle({ order, customObj }) {
+    if (isWebhookSuccessful(customObj)) {
+        order.setPaymentStatus(Order.PAYMENT_STATUS_NOTPAID);
+        order.trackOrderChange('Capture failed, cancelling order');
+        OrderMgr.cancelOrder(order);
+    }
+    AdyenLogs.info_log(`Capture failed for order ${order.orderNo}`);
 }
 module.exports = {
-  handle
+    handle
 };

@@ -1,4 +1,4 @@
-"use strict";
+'use strict';
 
 var server = require('server');
 var csrf = require('*/cartridge/scripts/middleware/csrf');
@@ -9,6 +9,6 @@ server.extend(module.superModule);
  * This is needed for csrf protection for express payments on mini cart.
  */
 server.prepend('MiniCartShow', csrf.generateToken, (req, res, next) => {
-  next();
+    next();
 });
 module.exports = server.exports();

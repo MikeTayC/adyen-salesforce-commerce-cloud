@@ -1,11 +1,11 @@
-"use strict";
+'use strict';
 
 /**
  *
  */
 var middlewares = require('*/cartridge/adyen/scripts/hooks/payment/processor/middlewares/index');
 function Handle(basket, paymentInformation) {
-  return middlewares.handle(basket, paymentInformation);
+    return middlewares.handle(basket, paymentInformation);
 }
 
 /**
@@ -18,7 +18,7 @@ function Handle(basket, paymentInformation) {
  * @return {Object} returns an error object
  */
 function Authorize(order, paymentInstrument, paymentProcessor) {
-  return middlewares.authorize(order, paymentInstrument, paymentProcessor);
+    return middlewares.authorize(order, paymentInstrument, paymentProcessor);
 }
 exports.Handle = Handle;
 exports.Authorize = Authorize;

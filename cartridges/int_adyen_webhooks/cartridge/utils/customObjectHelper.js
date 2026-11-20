@@ -1,4 +1,4 @@
-"use strict";
+'use strict';
 
 var Transaction = require('dw/system/Transaction');
 var CustomObjectMgr = require('dw/object/CustomObjectMgr');
@@ -13,23 +13,23 @@ var constants = require('*/cartridge/utils/constants');
  * @returns {dw.object.CustomObject} The created or updated custom object
  */
 function createOrUpdateCustomObject(type, key, data) {
-  var customObj;
-  Transaction.wrap(() => {
-    customObj = CustomObjectMgr.getCustomObject(type, key);
-    if (!customObj) {
-      customObj = CustomObjectMgr.createCustomObject(type, key);
-    }
-    for (var field in data) {
-      if (Object.prototype.hasOwnProperty.call(data, field)) {
-        try {
-          customObj.custom[field] = data[field];
-        } catch (e) {
-          // unknown field, ignore
+    var customObj;
+    Transaction.wrap(() => {
+        customObj = CustomObjectMgr.getCustomObject(type, key);
+        if (!customObj) {
+            customObj = CustomObjectMgr.createCustomObject(type, key);
         }
-      }
-    }
-  });
-  return customObj;
+        for (var field in data) {
+            if (Object.prototype.hasOwnProperty.call(data, field)) {
+                try {
+                    customObj.custom[field] = data[field];
+                } catch (e) {
+                    // unknown field, ignore
+                }
+            }
+        }
+    });
+    return customObj;
 }
 
 /**
@@ -41,16 +41,20 @@ function createOrUpdateCustomObject(type, key, data) {
  * @param {Object} notificationData
  */
 function setCustomObjectStatus(customObj, eventCode, merchantReference, notificationData) {
-  if (constants.PROCESS_EVENTS.includes(eventCode)) {
-    customObj.custom.updateStatus = constants.UPDATE_STATUS.PROCESS;
-    AdyenLogs.info_log(`Received notification for merchantReference ${merchantReference} with status ${eventCode}. Custom Object set up to '${constants.UPDATE_STATUS.PROCESS}' status.`);
-  } else {
-    customObj.custom.updateStatus = constants.UPDATE_STATUS.PENDING;
-    AdyenLogs.info_log(`Received notification for merchantReference ${merchantReference} with status ${eventCode}. Custom Object set up to '${constants.UPDATE_STATUS.PENDING}' status.`);
-  }
-  if (eventCode === 'AUTHORISATION') {
-    customObj.custom.Adyen_log = JSON.stringify(notificationData);
-  }
+    if (constants.PROCESS_EVENTS.includes(eventCode)) {
+        customObj.custom.updateStatus = constants.UPDATE_STATUS.PROCESS;
+        AdyenLogs.info_log(
+            `Received notification for merchantReference ${merchantReference} with status ${eventCode}. Custom Object set up to '${constants.UPDATE_STATUS.PROCESS}' status.`
+        );
+    } else {
+        customObj.custom.updateStatus = constants.UPDATE_STATUS.PENDING;
+        AdyenLogs.info_log(
+            `Received notification for merchantReference ${merchantReference} with status ${eventCode}. Custom Object set up to '${constants.UPDATE_STATUS.PENDING}' status.`
+        );
+    }
+    if (eventCode === 'AUTHORISATION') {
+        customObj.custom.Adyen_log = JSON.stringify(notificationData);
+    }
 }
 
 /**
@@ -59,26 +63,26 @@ function setCustomObjectStatus(customObj, eventCode, merchantReference, notifica
  * @returns {string}
  */
 function createLogMessage(notificationData) {
-  var VERSION = notificationData.version;
-  var msg = '';
-  msg = `AdyenNotification v ${VERSION}`;
-  msg += '\n================================================================\n';
-  msg = `${msg}reason : ${notificationData.reason}`;
-  msg = `${msg}\neventDate : ${notificationData.eventDate}`;
-  msg = `${msg}\nmerchantReference : ${notificationData.merchantReference}`;
-  msg = `${msg}\ncurrency : ${notificationData.currency}`;
-  msg = `${msg}\npspReference : ${notificationData.pspReference}`;
-  msg = `${msg}\nmerchantAccountCode : ${notificationData.merchantAccountCode}`;
-  msg = `${msg}\neventCode : ${notificationData.eventCode}`;
-  msg = `${msg}\nvalue : ${notificationData.value}`;
-  msg = `${msg}\noperations : ${notificationData.operations}`;
-  msg = `${msg}\nsuccess : ${notificationData.success}`;
-  msg = `${msg}\npaymentMethod : ${notificationData.paymentMethod}`;
-  msg = `${msg}\nlive : ${notificationData.live}`;
-  return msg;
+    var VERSION = notificationData.version;
+    var msg = '';
+    msg = `AdyenNotification v ${VERSION}`;
+    msg += '\n================================================================\n';
+    msg = `${msg}reason : ${notificationData.reason}`;
+    msg = `${msg}\neventDate : ${notificationData.eventDate}`;
+    msg = `${msg}\nmerchantReference : ${notificationData.merchantReference}`;
+    msg = `${msg}\ncurrency : ${notificationData.currency}`;
+    msg = `${msg}\npspReference : ${notificationData.pspReference}`;
+    msg = `${msg}\nmerchantAccountCode : ${notificationData.merchantAccountCode}`;
+    msg = `${msg}\neventCode : ${notificationData.eventCode}`;
+    msg = `${msg}\nvalue : ${notificationData.value}`;
+    msg = `${msg}\noperations : ${notificationData.operations}`;
+    msg = `${msg}\nsuccess : ${notificationData.success}`;
+    msg = `${msg}\npaymentMethod : ${notificationData.paymentMethod}`;
+    msg = `${msg}\nlive : ${notificationData.live}`;
+    return msg;
 }
 module.exports = {
-  createOrUpdateCustomObject,
-  setCustomObjectStatus,
-  createLogMessage
+    createOrUpdateCustomObject,
+    setCustomObjectStatus,
+    createLogMessage
 };

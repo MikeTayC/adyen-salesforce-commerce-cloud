@@ -1,7 +1,7 @@
-"use strict";
+'use strict';
 
 module.exports = {
-  en_US: {
-    fastlane: 'Fastlane'
-  }
+    en_US: {
+        fastlane: 'Fastlane'
+    }
 };

@@ -1,4 +1,4 @@
-"use strict";
+'use strict';
 
 // script include
 var AdyenHelper = require('*/cartridge/adyen/utils/adyenHelper');
@@ -8,39 +8,39 @@ var blockedPayments = require('*/cartridge/adyen/config/blockedPaymentMethods.js
 
 // eslint-disable-next-line complexity
 function getMethods(paymentAmount, customer, countryCode, shopperEmail, allowedPaymentMethods) {
-  var paymentMethodsRequest = {
-    merchantAccount: AdyenConfigs.getAdyenMerchantAccount(),
-    amount: {
-      currency: paymentAmount.currencyCode,
-      value: paymentAmount.value
+    var paymentMethodsRequest = {
+        merchantAccount: AdyenConfigs.getAdyenMerchantAccount(),
+        amount: {
+            currency: paymentAmount.currencyCode,
+            value: paymentAmount.value
+        }
+    };
+    if (countryCode) {
+        paymentMethodsRequest.countryCode = countryCode;
     }
-  };
-  if (countryCode) {
-    paymentMethodsRequest.countryCode = countryCode;
-  }
-  if (request.getLocale()) {
-    paymentMethodsRequest.shopperLocale = request.getLocale();
-  }
-  if (shopperEmail) {
-    paymentMethodsRequest.shopperEmail = shopperEmail;
-  }
-  if (allowedPaymentMethods) {
-    paymentMethodsRequest.allowedPaymentMethods = allowedPaymentMethods;
-  }
+    if (request.getLocale()) {
+        paymentMethodsRequest.shopperLocale = request.getLocale();
+    }
+    if (shopperEmail) {
+        paymentMethodsRequest.shopperEmail = shopperEmail;
+    }
+    if (allowedPaymentMethods) {
+        paymentMethodsRequest.allowedPaymentMethods = allowedPaymentMethods;
+    }
 
-  // check logged in shopper for oneClick
-  var profile = customer && customer.registered && customer.getProfile() ? customer.getProfile() : null;
-  var customerID = null;
-  if (profile && profile.getCustomerNo()) {
-    customerID = profile.getCustomerNo();
-  }
-  if (customerID) {
-    paymentMethodsRequest.shopperReference = customerID;
-  }
-  paymentMethodsRequest.blockedPaymentMethods = blockedPayments.blockedPaymentMethods;
-  paymentMethodsRequest.shopperConversionId = session.sessionID.slice(0, 200);
-  return AdyenHelper.executeCall(constants.SERVICE.CHECKOUTPAYMENTMETHODS, paymentMethodsRequest);
+    // check logged in shopper for oneClick
+    var profile = customer && customer.registered && customer.getProfile() ? customer.getProfile() : null;
+    var customerID = null;
+    if (profile && profile.getCustomerNo()) {
+        customerID = profile.getCustomerNo();
+    }
+    if (customerID) {
+        paymentMethodsRequest.shopperReference = customerID;
+    }
+    paymentMethodsRequest.blockedPaymentMethods = blockedPayments.blockedPaymentMethods;
+    paymentMethodsRequest.shopperConversionId = session.sessionID.slice(0, 200);
+    return AdyenHelper.executeCall(constants.SERVICE.CHECKOUTPAYMENTMETHODS, paymentMethodsRequest);
 }
 module.exports = {
-  getMethods
+    getMethods
 };

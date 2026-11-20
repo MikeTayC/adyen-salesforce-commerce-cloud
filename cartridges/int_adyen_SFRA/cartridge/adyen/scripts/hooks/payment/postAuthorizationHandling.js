@@ -1,4 +1,4 @@
-"use strict";
+'use strict';
 
 // Dummy implementation
 /**
@@ -7,10 +7,10 @@
  */
 // eslint-disable-next-line
 function postAuthorization(result) {
-  return {
-    error: false
-  };
+    return {
+        error: false
+    };
 }
 module.exports = {
-  postAuthorization
+    postAuthorization
 };

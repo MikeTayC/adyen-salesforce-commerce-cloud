@@ -1,4 +1,4 @@
-"use strict";
+'use strict';
 
 var middlewares = require('*/cartridge/adyen/scripts/hooks/payment/processor/middlewares/index');
 
@@ -10,7 +10,7 @@ var middlewares = require('*/cartridge/adyen/scripts/hooks/payment/processor/mid
  * @returns {Object} an object that has error information or payment information
  */
 function processForm(req, paymentForm, viewFormData) {
-  return middlewares.processForm(req, paymentForm, viewFormData);
+    return middlewares.processForm(req, paymentForm, viewFormData);
 }
 
 /**
@@ -20,7 +20,7 @@ function processForm(req, paymentForm, viewFormData) {
  * @param {Object} billingData - payment information
  */
 function savePaymentInformation(req, basket, billingData) {
-  return middlewares.savePaymentInformation(req, basket, billingData);
+    return middlewares.savePaymentInformation(req, basket, billingData);
 }
 exports.processForm = processForm;
 exports.savePaymentInformation = savePaymentInformation;

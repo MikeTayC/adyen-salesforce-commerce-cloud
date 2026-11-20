@@ -1,4 +1,4 @@
-"use strict";
+'use strict';
 
 var getCheckoutPaymentMethods = require('*/cartridge/adyen/scripts/payments/getCheckoutPaymentMethods');
 var getCheckoutExpressPaymentMethods = require('*/cartridge/adyen/scripts/expressPayments/getCheckoutExpressPaymentMethods');
@@ -27,30 +27,30 @@ var createTemporaryBasket = require('*/cartridge/adyen/scripts/expressPayments/c
 var saveExpressPaymentData = require('*/cartridge/adyen/scripts/expressPayments/paypal/saveExpressPaymentData');
 var calculatePrice = require('*/cartridge/adyen/scripts/expressPayments/calculatePrice');
 module.exports = {
-  getCheckoutPaymentMethods,
-  getCheckoutExpressPaymentMethods,
-  paymentFromComponent,
-  paymentsDetails,
-  redirect3ds1Response,
-  callGetShippingMethods,
-  callSelectShippingMethod,
-  saveExpressShopperDetails,
-  checkBalance,
-  cancelPartialPaymentOrder,
-  partialPaymentsOrder,
-  partialPayment,
-  fetchGiftCards,
-  getBasketAmount,
-  showConfirmation,
-  showConfirmationPaymentFromComponent,
-  notify,
-  makeExpressPaymentsCall,
-  makeExpressPaymentDetailsCall,
-  saveShopperData,
-  handleCheckoutReview,
-  validatePaymentDataFromRequest,
-  createTemporaryBasket,
-  getConnectedTerminals,
-  saveExpressPaymentData,
-  calculatePrice
+    getCheckoutPaymentMethods,
+    getCheckoutExpressPaymentMethods,
+    paymentFromComponent,
+    paymentsDetails,
+    redirect3ds1Response,
+    callGetShippingMethods,
+    callSelectShippingMethod,
+    saveExpressShopperDetails,
+    checkBalance,
+    cancelPartialPaymentOrder,
+    partialPaymentsOrder,
+    partialPayment,
+    fetchGiftCards,
+    getBasketAmount,
+    showConfirmation,
+    showConfirmationPaymentFromComponent,
+    notify,
+    makeExpressPaymentsCall,
+    makeExpressPaymentDetailsCall,
+    saveShopperData,
+    handleCheckoutReview,
+    validatePaymentDataFromRequest,
+    createTemporaryBasket,
+    getConnectedTerminals,
+    saveExpressPaymentData,
+    calculatePrice
 };

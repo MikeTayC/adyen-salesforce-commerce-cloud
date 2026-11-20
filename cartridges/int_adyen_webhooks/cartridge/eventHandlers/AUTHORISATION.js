@@ -1,14 +1,10 @@
-"use strict";
+'use strict';
 
 var Order = require('dw/order/Order');
 var OrderMgr = require('dw/order/OrderMgr');
 var AdyenLogs = require('*/cartridge/adyen/logs/adyenCustomLogs');
-var {
-  placeOrder
-} = require('*/cartridge/utils/paymentUtils');
-var {
-  isWebhookSuccessful
-} = require('*/cartridge/utils/webhookUtils');
+var { placeOrder } = require('*/cartridge/utils/paymentUtils');
+var { isWebhookSuccessful } = require('*/cartridge/utils/webhookUtils');
 var constants = require('*/cartridge/utils/constants');
 var collections = require('*/cartridge/scripts/util/collections');
 
@@ -17,7 +13,7 @@ var collections = require('*/cartridge/scripts/util/collections');
  * @param {dw.order.Order} order - The order object
  */
 function handleDuplicateCallback(order) {
-  AdyenLogs.info_log(`Duplicate callback received for order ${order.orderNo}.`);
+    AdyenLogs.info_log(`Duplicate callback received for order ${order.orderNo}.`);
 }
 
 /**
@@ -27,8 +23,8 @@ function handleDuplicateCallback(order) {
  * @param {number} totalAmount - Total order amount
  */
 function handlePartialPayment(order, customObj, totalAmount) {
-  order.setPaymentStatus(Order.PAYMENT_STATUS_PARTPAID);
-  AdyenLogs.info_log(`Partial amount ${customObj.custom.value} received for order number ${order.orderNo} with total amount ${totalAmount}`);
+    order.setPaymentStatus(Order.PAYMENT_STATUS_PARTPAID);
+    AdyenLogs.info_log(`Partial amount ${customObj.custom.value} received for order number ${order.orderNo} with total amount ${totalAmount}`);
 }
 
 /**
@@ -38,10 +34,10 @@ function handlePartialPayment(order, customObj, totalAmount) {
  * @param {number} totalAmount - Total order amount
  */
 function handleFailedOrderRecovery(order, amountPaid, totalAmount) {
-  if (order.status.value === Order.ORDER_STATUS_FAILED && amountPaid === totalAmount) {
-    OrderMgr.undoFailOrder(order);
-    order.trackOrderChange('Authorisation webhook received for failed order, moving order status to CREATED');
-  }
+    if (order.status.value === Order.ORDER_STATUS_FAILED && amountPaid === totalAmount) {
+        OrderMgr.undoFailOrder(order);
+        order.trackOrderChange('Authorisation webhook received for failed order, moving order status to CREATED');
+    }
 }
 
 /**
@@ -51,16 +47,16 @@ function handleFailedOrderRecovery(order, amountPaid, totalAmount) {
  * @returns {boolean} True if order was successfully placed
  */
 function handleSuccessfulAuthorisation(order, result) {
-  var placeOrderResult = placeOrder(order);
-  if (!placeOrderResult.error) {
-    order.setPaymentStatus(Order.PAYMENT_STATUS_PAID);
-    order.setExportStatus(Order.EXPORT_STATUS_READY);
-    order.setConfirmationStatus(Order.CONFIRMATION_STATUS_CONFIRMED);
-    AdyenLogs.info_log(`Order ${order.orderNo} updated to status PAID.`);
-    result.SubmitOrder = true;
-    return true;
-  }
-  return false;
+    var placeOrderResult = placeOrder(order);
+    if (!placeOrderResult.error) {
+        order.setPaymentStatus(Order.PAYMENT_STATUS_PAID);
+        order.setExportStatus(Order.EXPORT_STATUS_READY);
+        order.setConfirmationStatus(Order.CONFIRMATION_STATUS_CONFIRMED);
+        AdyenLogs.info_log(`Order ${order.orderNo} updated to status PAID.`);
+        result.SubmitOrder = true;
+        return true;
+    }
+    return false;
 }
 
 /**
@@ -68,13 +64,13 @@ function handleSuccessfulAuthorisation(order, result) {
  * @param {dw.order.Order} order - The order object
  */
 function handleFailedAuthorisation(order) {
-  AdyenLogs.info_log(`Authorization for order ${order.orderNo} was not successful - no update.`);
-  // Determine if payment was refused and was used Adyen payment method
-  if (order.status.value === Order.ORDER_STATUS_FAILED) {
-    order.setConfirmationStatus(Order.CONFIRMATION_STATUS_NOTCONFIRMED);
-    order.setPaymentStatus(Order.PAYMENT_STATUS_NOTPAID);
-    order.setExportStatus(Order.EXPORT_STATUS_NOTEXPORTED);
-  }
+    AdyenLogs.info_log(`Authorization for order ${order.orderNo} was not successful - no update.`);
+    // Determine if payment was refused and was used Adyen payment method
+    if (order.status.value === Order.ORDER_STATUS_FAILED) {
+        order.setConfirmationStatus(Order.CONFIRMATION_STATUS_NOTCONFIRMED);
+        order.setPaymentStatus(Order.PAYMENT_STATUS_NOTPAID);
+        order.setExportStatus(Order.EXPORT_STATUS_NOTEXPORTED);
+    }
 }
 
 /**
@@ -84,8 +80,8 @@ function handleFailedAuthorisation(order) {
  * @param {number} amountPaid - Amount paid
  */
 function updateOrderWithAdyenData(order, customObj, amountPaid) {
-  order.custom.Adyen_eventCode = customObj.custom.eventCode;
-  order.custom.Adyen_value = amountPaid.toString();
+    order.custom.Adyen_eventCode = customObj.custom.eventCode;
+    order.custom.Adyen_value = amountPaid.toString();
 }
 
 /**
@@ -94,19 +90,17 @@ function updateOrderWithAdyenData(order, customObj, amountPaid) {
  * @param {Object} customObj - Custom object from webhook
  */
 function handleCSCOrderProperties(order, customObj) {
-  if (order.custom.Adyen_serviceChannel === 'CSC') {
-    order.custom.Adyen_pspReference = customObj.custom.pspReference;
-    var {
-      paymentMethod
-    } = customObj.custom;
-    order.custom.Adyen_paymentMethod = paymentMethod;
-    collections.forEach(order.getPaymentInstruments(), pi => {
-      pi.custom.adyenPaymentMethod = paymentMethod;
-      pi.custom[`${constants.OMS_NAMESPACE}__Adyen_Payment_Method`] = paymentMethod;
-      pi.custom.Adyen_Payment_Method_Variant = paymentMethod;
-      pi.custom[`${constants.OMS_NAMESPACE}__Adyen_Payment_Method_Variant`] = paymentMethod;
-    });
-  }
+    if (order.custom.Adyen_serviceChannel === 'CSC') {
+        order.custom.Adyen_pspReference = customObj.custom.pspReference;
+        var { paymentMethod } = customObj.custom;
+        order.custom.Adyen_paymentMethod = paymentMethod;
+        collections.forEach(order.getPaymentInstruments(), (pi) => {
+            pi.custom.adyenPaymentMethod = paymentMethod;
+            pi.custom[`${constants.OMS_NAMESPACE}__Adyen_Payment_Method`] = paymentMethod;
+            pi.custom.Adyen_Payment_Method_Variant = paymentMethod;
+            pi.custom[`${constants.OMS_NAMESPACE}__Adyen_Payment_Method_Variant`] = paymentMethod;
+        });
+    }
 }
 
 /**
@@ -118,40 +112,35 @@ function handleCSCOrderProperties(order, customObj) {
  * @param {number} params.totalAmount - Total order amount
  * @returns {Object} Handler result with success status
  */
-function handle({
-  order,
-  customObj,
-  result,
-  totalAmount
-}) {
-  if (isWebhookSuccessful(customObj)) {
-    var amountPaid = parseFloat(customObj.custom.value);
-    var webhookData = JSON.parse(customObj.custom.Adyen_log);
-    var fraudResultType = webhookData['additionalData.fraudResultType'];
-    if (order.paymentStatus.value === Order.PAYMENT_STATUS_PAID) {
-      handleDuplicateCallback(order);
-    } else if (amountPaid < totalAmount) {
-      handlePartialPayment(order, customObj, totalAmount);
-    } else if (fraudResultType === constants.FRAUD_STATUS_AMBER) {
-      order.trackOrderChange('Order sent for manual review in Adyen Customer Area');
-    } else {
-      handleFailedOrderRecovery(order, amountPaid, totalAmount);
-      handleSuccessfulAuthorisation(order, result);
-      handleCSCOrderProperties(order, customObj);
+function handle({ order, customObj, result, totalAmount }) {
+    if (isWebhookSuccessful(customObj)) {
+        var amountPaid = parseFloat(customObj.custom.value);
+        var webhookData = JSON.parse(customObj.custom.Adyen_log);
+        var fraudResultType = webhookData['additionalData.fraudResultType'];
+        if (order.paymentStatus.value === Order.PAYMENT_STATUS_PAID) {
+            handleDuplicateCallback(order);
+        } else if (amountPaid < totalAmount) {
+            handlePartialPayment(order, customObj, totalAmount);
+        } else if (fraudResultType === constants.FRAUD_STATUS_AMBER) {
+            order.trackOrderChange('Order sent for manual review in Adyen Customer Area');
+        } else {
+            handleFailedOrderRecovery(order, amountPaid, totalAmount);
+            handleSuccessfulAuthorisation(order, result);
+            handleCSCOrderProperties(order, customObj);
+        }
+        updateOrderWithAdyenData(order, customObj, amountPaid);
+        return {
+            success: true,
+            isAdyenPayment: true
+        };
     }
-    updateOrderWithAdyenData(order, customObj, amountPaid);
+    handleFailedAuthorisation(order);
     return {
-      success: true,
-      isAdyenPayment: true
+        success: false,
+        isAdyenPayment: true
     };
-  }
-  handleFailedAuthorisation(order);
-  return {
-    success: false,
-    isAdyenPayment: true
-  };
 }
 module.exports = {
-  handle,
-  handleSuccessfulAuthorisation
+    handle,
+    handleSuccessfulAuthorisation
 };

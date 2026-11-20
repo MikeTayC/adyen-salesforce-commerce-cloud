@@ -1,10 +1,8 @@
-"use strict";
+'use strict';
 
 var server = require('server');
 var adyenGiving = require('*/cartridge/adyen/scripts/donations/adyenGiving');
-var {
-  adyen
-} = require('*/cartridge/controllers/middlewares/index');
+var { adyen } = require('*/cartridge/controllers/middlewares/index');
 var csrf = require('*/cartridge/scripts/middleware/csrf');
 var EXTERNAL_PLATFORM_VERSION = 'SFRA';
 
@@ -62,8 +60,8 @@ server.post('GetExpressPaymentMethods', server.middleware.https, csrf.validateRe
  * by this uncached include instead of being stored in the page cache.
  */
 server.get('PdpExpress', server.middleware.include, csrf.generateToken, (req, res, next) => {
-  res.render('adyen/pdpExpress');
-  next();
+    res.render('adyen/pdpExpress');
+    next();
 });
 server.post('GetConnectedTerminals', server.middleware.https, adyen.getConnectedTerminals);
 
@@ -75,7 +73,13 @@ server.get('CheckoutReview', server.middleware.https, csrf.generateToken, adyen.
 /**
  * Save paypal express payment data for review page.
  */
-server.post('SaveExpressPaymentData', server.middleware.https, csrf.validateRequest, adyen.validatePaymentDataFromRequest, adyen.saveExpressPaymentData);
+server.post(
+    'SaveExpressPaymentData',
+    server.middleware.https,
+    csrf.validateRequest,
+    adyen.validatePaymentDataFromRequest,
+    adyen.saveExpressPaymentData
+);
 
 /**
  * Called by Adyen to update status of payments. It should always display [accepted] when finished.
@@ -105,7 +109,13 @@ server.post('partialPayment', server.middleware.https, csrf.validateRequest, ady
 /**
  * Called by Adyen to make /payments call for PayPal Express flow
  */
-server.post('MakeExpressPaymentsCall', server.middleware.https, csrf.validateRequest, adyen.validatePaymentDataFromRequest, adyen.makeExpressPaymentsCall);
+server.post(
+    'MakeExpressPaymentsCall',
+    server.middleware.https,
+    csrf.validateRequest,
+    adyen.validatePaymentDataFromRequest,
+    adyen.makeExpressPaymentsCall
+);
 
 /**
  * Called by Adyen to make /paymentsDetails for PayPal Express flow
@@ -132,7 +142,7 @@ server.get('GetBasketAmount', server.middleware.https, adyen.getBasketAmount);
 server.post('CreateTemporaryBasket', server.middleware.https, csrf.validateRequest, adyen.createTemporaryBasket);
 server.post('CalculatePrice', server.middleware.https, csrf.validateRequest, adyen.calculatePrice);
 function getExternalPlatformVersion() {
-  return EXTERNAL_PLATFORM_VERSION;
+    return EXTERNAL_PLATFORM_VERSION;
 }
 module.exports = server.exports();
 module.exports.getExternalPlatformVersion = getExternalPlatformVersion();

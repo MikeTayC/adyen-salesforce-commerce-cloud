@@ -1,4 +1,4 @@
-"use strict";
+'use strict';
 
 /**
  * Checks if the webhook event was successful
@@ -6,8 +6,8 @@
  * @returns {boolean} True if the webhook event was successful
  */
 function isWebhookSuccessful(customObj) {
-  return customObj && customObj.custom && customObj.custom.success === 'true';
+    return customObj && customObj.custom && customObj.custom.success === 'true';
 }
 module.exports = {
-  isWebhookSuccessful
+    isWebhookSuccessful
 };

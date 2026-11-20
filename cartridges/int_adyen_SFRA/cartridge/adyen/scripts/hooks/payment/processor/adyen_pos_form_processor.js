@@ -1,4 +1,4 @@
-"use strict";
+'use strict';
 
 /**
  * Verifies the required information for billing form is provided.
@@ -8,15 +8,15 @@
  * @returns {Object} an object that has error information or payment information
  */
 function processForm(req, paymentForm, viewFormData) {
-  var viewData = viewFormData;
-  viewData.paymentMethod = {
-    value: paymentForm.paymentMethod.value,
-    htmlName: paymentForm.paymentMethod.value
-  };
-  return {
-    error: false,
-    viewData
-  };
+    var viewData = viewFormData;
+    viewData.paymentMethod = {
+        value: paymentForm.paymentMethod.value,
+        htmlName: paymentForm.paymentMethod.value
+    };
+    return {
+        error: false,
+        viewData
+    };
 }
 
 /**

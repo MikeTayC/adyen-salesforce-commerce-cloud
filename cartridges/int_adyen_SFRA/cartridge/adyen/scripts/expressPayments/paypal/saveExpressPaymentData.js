@@ -1,4 +1,4 @@
-"use strict";
+'use strict';
 
 var URLUtils = require('dw/web/URLUtils');
 var BasketMgr = require('dw/order/BasketMgr');
@@ -7,9 +7,7 @@ var validationHelpers = require('*/cartridge/scripts/helpers/basketValidationHel
 var AdyenLogs = require('*/cartridge/adyen/logs/adyenCustomLogs');
 var AdyenHelper = require('*/cartridge/adyen/utils/adyenHelper');
 var setErrorType = require('*/cartridge/adyen/logs/setErrorType');
-var {
-  AdyenError
-} = require('*/cartridge/adyen/logs/adyenError');
+var { AdyenError } = require('*/cartridge/adyen/logs/adyenError');
 
 /**
  * Sets Shipping and Billing address for the basket,
@@ -19,17 +17,15 @@ var {
  * @returns {undefined}
  */
 function updateCurrentBasket(currentBasket, req) {
-  var {
-    details
-  } = JSON.parse(req.form.data);
-  if ((currentBasket.shipments || {}).length <= 1) {
-    req.session.privacyCache.set('usingMultiShipping', false);
-  }
-  var paymentInstrument = currentBasket.getPaymentInstruments()[0];
-  Transaction.wrap(() => {
-    currentBasket.custom.paypalExpressPaymentData = req.form.data;
-    paymentInstrument.custom.adyenPaymentMethod = AdyenHelper.getAdyenComponentType((details || {}).paymentSource);
-  });
+    var { details } = JSON.parse(req.form.data);
+    if ((currentBasket.shipments || {}).length <= 1) {
+        req.session.privacyCache.set('usingMultiShipping', false);
+    }
+    var paymentInstrument = currentBasket.getPaymentInstruments()[0];
+    Transaction.wrap(() => {
+        currentBasket.custom.paypalExpressPaymentData = req.form.data;
+        paymentInstrument.custom.adyenPaymentMethod = AdyenHelper.getAdyenComponentType((details || {}).paymentSource);
+    });
 }
 
 /**
@@ -41,34 +37,32 @@ function updateCurrentBasket(currentBasket, req) {
  */
 // eslint-disable-next-line
 function saveExpressPaymentData(req, res, next) {
-  try {
-    if (!req.form.data) {
-      throw new AdyenError('State data not present in the request');
+    try {
+        if (!req.form.data) {
+            throw new AdyenError('State data not present in the request');
+        }
+        var parsedData = JSON.parse(req.form.data || '{}');
+        var { isExpressPdp } = parsedData || {};
+        var currentBasket = isExpressPdp ? BasketMgr.getTemporaryBasket(session.privacy.temporaryBasketId) : BasketMgr.getCurrentBasket();
+        if (!currentBasket) {
+            res.redirect(URLUtils.url('Cart-Show'));
+            return next();
+        }
+        var validatedProducts = validationHelpers.validateProducts(currentBasket);
+        if (validatedProducts.error) {
+            res.redirect(URLUtils.url('Cart-Show'));
+            return next();
+        }
+        updateCurrentBasket(currentBasket, req);
+        res.json({
+            success: true,
+            redirectUrl: URLUtils.url('Adyen-CheckoutReview').toString()
+        });
+    } catch (error) {
+        AdyenLogs.error_log('Could not save paypal express payment data', error);
+        setErrorType(error, res);
+        res.redirect(URLUtils.url('Error-ErrorCode', 'err', 'general'));
     }
-    var parsedData = JSON.parse(req.form.data || '{}');
-    var {
-      isExpressPdp
-    } = parsedData || {};
-    var currentBasket = isExpressPdp ? BasketMgr.getTemporaryBasket(session.privacy.temporaryBasketId) : BasketMgr.getCurrentBasket();
-    if (!currentBasket) {
-      res.redirect(URLUtils.url('Cart-Show'));
-      return next();
-    }
-    var validatedProducts = validationHelpers.validateProducts(currentBasket);
-    if (validatedProducts.error) {
-      res.redirect(URLUtils.url('Cart-Show'));
-      return next();
-    }
-    updateCurrentBasket(currentBasket, req);
-    res.json({
-      success: true,
-      redirectUrl: URLUtils.url('Adyen-CheckoutReview').toString()
-    });
-  } catch (error) {
-    AdyenLogs.error_log('Could not save paypal express payment data', error);
-    setErrorType(error, res);
-    res.redirect(URLUtils.url('Error-ErrorCode', 'err', 'general'));
-  }
-  return next();
+    return next();
 }
 module.exports = saveExpressPaymentData;

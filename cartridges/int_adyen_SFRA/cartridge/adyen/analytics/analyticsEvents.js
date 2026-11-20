@@ -1,4 +1,4 @@
-"use strict";
+'use strict';
 
 var CustomObjectMgr = require('dw/object/CustomObjectMgr');
 var UUIDUtils = require('dw/util/UUIDUtils');
@@ -6,48 +6,48 @@ var Transaction = require('dw/system/Transaction');
 var constants = require('*/cartridge/adyen/analytics/constants');
 var adyenConstants = require('*/cartridge/adyen/config/constants');
 function createCustomObject(objectId, referenceId, eventSource, eventType, eventCode, eventDate) {
-  Transaction.wrap(() => {
-    var uuid = UUIDUtils.createUUID();
-    var customObj = CustomObjectMgr.createCustomObject(objectId, uuid);
-    customObj.custom.referenceId = referenceId;
-    customObj.custom.eventSource = eventSource;
-    customObj.custom.eventType = eventType;
-    customObj.custom.eventCode = eventCode;
-    customObj.custom.version = adyenConstants.VERSION;
-    customObj.custom.processingStatus = constants.processingStatus.NOT_PROCESSED;
-    customObj.custom.retryCount = 0;
-    if (eventDate) {
-      customObj.custom.eventDate = eventDate;
-    }
-  });
+    Transaction.wrap(() => {
+        var uuid = UUIDUtils.createUUID();
+        var customObj = CustomObjectMgr.createCustomObject(objectId, uuid);
+        customObj.custom.referenceId = referenceId;
+        customObj.custom.eventSource = eventSource;
+        customObj.custom.eventType = eventType;
+        customObj.custom.eventCode = eventCode;
+        customObj.custom.version = adyenConstants.VERSION;
+        customObj.custom.processingStatus = constants.processingStatus.NOT_PROCESSED;
+        customObj.custom.retryCount = 0;
+        if (eventDate) {
+            customObj.custom.eventDate = eventDate;
+        }
+    });
 }
 function createConfigurationTimeEvent(referenceId, eventSource, eventType, eventCode, eventDate) {
-  createCustomObject(constants.configurationTimeEventObjectId, referenceId, eventSource, eventType, eventCode, eventDate);
+    createCustomObject(constants.configurationTimeEventObjectId, referenceId, eventSource, eventType, eventCode, eventDate);
 }
 function createAnalyticsEvent(referenceId, eventSource, eventType, eventCode) {
-  createCustomObject(constants.analyticsEventObjectId, referenceId, eventSource, eventType, eventCode);
+    createCustomObject(constants.analyticsEventObjectId, referenceId, eventSource, eventType, eventCode);
 }
 function deleteAnalyticsEvent(keyValue) {
-  Transaction.wrap(() => {
-    var customObj = CustomObjectMgr.getCustomObject(constants.analyticsEventObjectId, keyValue);
-    if (customObj) {
-      CustomObjectMgr.remove(customObj);
-    }
-  });
+    Transaction.wrap(() => {
+        var customObj = CustomObjectMgr.getCustomObject(constants.analyticsEventObjectId, keyValue);
+        if (customObj) {
+            CustomObjectMgr.remove(customObj);
+        }
+    });
 }
 function updateAnalyticsEvent(keyValue, attributes) {
-  Transaction.wrap(() => {
-    var customObj = CustomObjectMgr.getCustomObject(constants.analyticsEventObjectId, keyValue);
-    Object.entries(attributes).forEach(([key, value]) => {
-      if (Object.prototype.hasOwnProperty.call(customObj.custom, key)) {
-        customObj.custom[key] = value;
-      }
+    Transaction.wrap(() => {
+        var customObj = CustomObjectMgr.getCustomObject(constants.analyticsEventObjectId, keyValue);
+        Object.entries(attributes).forEach(([key, value]) => {
+            if (Object.prototype.hasOwnProperty.call(customObj.custom, key)) {
+                customObj.custom[key] = value;
+            }
+        });
     });
-  });
 }
 module.exports = {
-  createAnalyticsEvent,
-  createConfigurationTimeEvent,
-  deleteAnalyticsEvent,
-  updateAnalyticsEvent
+    createAnalyticsEvent,
+    createConfigurationTimeEvent,
+    deleteAnalyticsEvent,
+    updateAnalyticsEvent
 };

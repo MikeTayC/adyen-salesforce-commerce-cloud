@@ -1,9 +1,7 @@
-"use strict";
+'use strict';
 
 var collections = require('*/cartridge/scripts/util/collections');
-var {
-  createSelectedPaymentInstruments
-} = require('*/cartridge/models/createPayment');
+var { createSelectedPaymentInstruments } = require('*/cartridge/models/createPayment');
 var base = module.superModule;
 
 /**
@@ -13,7 +11,7 @@ var base = module.superModule;
  * @returns {Array} Array of objects that contain information about the selected payment instruments
  */
 function getSelectedPaymentInstruments(selectedPaymentInstruments) {
-  return collections.map(selectedPaymentInstruments, createSelectedPaymentInstruments);
+    return collections.map(selectedPaymentInstruments, createSelectedPaymentInstruments);
 }
 
 /**
@@ -24,10 +22,8 @@ function getSelectedPaymentInstruments(selectedPaymentInstruments) {
  * @constructor
  */
 function Payment(currentBasket, currentCustomer, countryCode) {
-  base.call(this, currentBasket, currentCustomer, countryCode);
-  var {
-    paymentInstruments
-  } = currentBasket;
-  this.selectedPaymentInstruments = paymentInstruments ? getSelectedPaymentInstruments(paymentInstruments) : null;
+    base.call(this, currentBasket, currentCustomer, countryCode);
+    var { paymentInstruments } = currentBasket;
+    this.selectedPaymentInstruments = paymentInstruments ? getSelectedPaymentInstruments(paymentInstruments) : null;
 }
 module.exports = Payment;

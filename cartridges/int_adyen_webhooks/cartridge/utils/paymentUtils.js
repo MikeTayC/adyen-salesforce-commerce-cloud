@@ -1,4 +1,4 @@
-"use strict";
+'use strict';
 
 var PaymentMgr = require('dw/order/PaymentMgr');
 var Order = require('dw/order/Order');
@@ -12,18 +12,18 @@ var constants = require('*/cartridge/utils/constants');
  * @returns {boolean} - True if any Adyen instrument was found
  */
 function handleAdyenPaymentInstruments(paymentInstruments, customObj) {
-  var foundAdyen = false;
-  Object.values(paymentInstruments).forEach(pi => {
-    var methodMatch = constants.ADYEN_METHODS.includes(pi.paymentMethod);
-    var processor = PaymentMgr.getPaymentMethod(pi.getPaymentMethod()).getPaymentProcessor().ID;
-    var processorMatch = constants.ADYEN_PROCESSORS.includes(processor);
-    if (methodMatch || processorMatch) {
-      foundAdyen = true;
-      pi.paymentTransaction.custom.Adyen_log = customObj.custom.Adyen_log;
-      pi.paymentTransaction.custom.Adyen_merchantSig = null;
-    }
-  });
-  return foundAdyen;
+    var foundAdyen = false;
+    Object.values(paymentInstruments).forEach((pi) => {
+        var methodMatch = constants.ADYEN_METHODS.includes(pi.paymentMethod);
+        var processor = PaymentMgr.getPaymentMethod(pi.getPaymentMethod()).getPaymentProcessor().ID;
+        var processorMatch = constants.ADYEN_PROCESSORS.includes(processor);
+        if (methodMatch || processorMatch) {
+            foundAdyen = true;
+            pi.paymentTransaction.custom.Adyen_log = customObj.custom.Adyen_log;
+            pi.paymentTransaction.custom.Adyen_merchantSig = null;
+        }
+    });
+    return foundAdyen;
 }
 
 /**
@@ -32,19 +32,19 @@ function handleAdyenPaymentInstruments(paymentInstruments, customObj) {
  * @returns {Object} Result of placing the order
  */
 function placeOrder(order) {
-  var fraudDetectionStatus = {
-    status: 'success'
-  };
-  // Only created orders can be placed
-  if (order.status.value === Order.ORDER_STATUS_CREATED) {
-    var placeOrderResult = COHelpers.placeOrder(order, fraudDetectionStatus);
-    return placeOrderResult;
-  }
-  return {
-    error: true
-  };
+    var fraudDetectionStatus = {
+        status: 'success'
+    };
+    // Only created orders can be placed
+    if (order.status.value === Order.ORDER_STATUS_CREATED) {
+        var placeOrderResult = COHelpers.placeOrder(order, fraudDetectionStatus);
+        return placeOrderResult;
+    }
+    return {
+        error: true
+    };
 }
 module.exports = {
-  handleAdyenPaymentInstruments,
-  placeOrder
+    handleAdyenPaymentInstruments,
+    placeOrder
 };

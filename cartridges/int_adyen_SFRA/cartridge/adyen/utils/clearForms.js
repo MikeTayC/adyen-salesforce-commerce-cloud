@@ -1,66 +1,66 @@
-"use strict";
+'use strict';
 
 var Transaction = require('dw/system/Transaction');
 /**
  * Clear custom session data
  */
 function clearCustomSessionFields() {
-  // Clears all fields used in the 3d secure payment.
-  session.privacy.paymentMethod = null;
-  session.privacy.brandCode = null;
-  session.privacy.issuer = null;
-  session.privacy.adyenPaymentMethod = null;
-  session.privacy.adyenIssuerName = null;
-  session.privacy.ratePayFingerprint = null;
-  session.privacy.amazonExpressShopperDetail = null;
-  session.privacy.temporaryBasketId = null;
+    // Clears all fields used in the 3d secure payment.
+    session.privacy.paymentMethod = null;
+    session.privacy.brandCode = null;
+    session.privacy.issuer = null;
+    session.privacy.adyenPaymentMethod = null;
+    session.privacy.adyenIssuerName = null;
+    session.privacy.ratePayFingerprint = null;
+    session.privacy.amazonExpressShopperDetail = null;
+    session.privacy.temporaryBasketId = null;
 }
 
 /**
  * Clear system session data
  */
 function clearForms() {
-  // Clears all forms used in the checkout process.
-  session.forms.billing.clearFormElement();
-  clearCustomSessionFields();
+    // Clears all forms used in the checkout process.
+    session.forms.billing.clearFormElement();
+    clearCustomSessionFields();
 }
 
 /**
  * Clear Adyen payment data
  */
 function clearAdyenData(paymentInstrument) {
-  Transaction.wrap(() => {
-    paymentInstrument.custom.adyenPaymentData = null;
-    paymentInstrument.custom.adyenPartialPaymentsOrder = null;
-    paymentInstrument.custom.adyenMD = null;
-  });
+    Transaction.wrap(() => {
+        paymentInstrument.custom.adyenPaymentData = null;
+        paymentInstrument.custom.adyenPartialPaymentsOrder = null;
+        paymentInstrument.custom.adyenMD = null;
+    });
 }
 
 /**
  * Clear Adyen basket data
  */
 function clearAdyenBasketData(basket) {
-  if (basket) {
-    Transaction.wrap(() => {
-      basket.custom.adyenGiftCards = null;
-      basket.custom.adyenGiftCardsOrderNo = null;
-      basket.custom.partialPaymentOrderData = null;
-      basket.custom.adyenGiftCardBalance = null;
-    });
-  }
+    if (basket) {
+        Transaction.wrap(() => {
+            basket.custom.adyenGiftCards = null;
+            basket.custom.adyenGiftCardsOrderNo = null;
+            basket.custom.partialPaymentOrderData = null;
+            basket.custom.adyenGiftCardBalance = null;
+        });
+    }
 }
 
 /**
  * Clear Adyen transaction data
  */
 function clearPaymentTransactionData(paymentInstrument) {
-  Transaction.wrap(() => {
-    paymentInstrument.paymentTransaction.custom.Adyen_authResult = null;
-  });
+    Transaction.wrap(() => {
+        paymentInstrument.paymentTransaction.custom.Adyen_authResult = null;
+    });
 }
 module.exports = {
-  clearForms,
-  clearAdyenData,
-  clearPaymentTransactionData,
-  clearAdyenBasketData
+    clearForms,
+    clearAdyenData,
+    clearPaymentTransactionData,
+    clearAdyenBasketData
 };

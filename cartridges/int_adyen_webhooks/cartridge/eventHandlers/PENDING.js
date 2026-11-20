@@ -1,14 +1,12 @@
-"use strict";
+'use strict';
 
 var AdyenLogs = require('*/cartridge/adyen/logs/adyenCustomLogs');
-function handle({
-  order
-}) {
-  AdyenLogs.info_log(`Order ${order.orderNo} was in pending status.`);
-  return {
-    pending: true
-  };
+function handle({ order }) {
+    AdyenLogs.info_log(`Order ${order.orderNo} was in pending status.`);
+    return {
+        pending: true
+    };
 }
 module.exports = {
-  handle
+    handle
 };

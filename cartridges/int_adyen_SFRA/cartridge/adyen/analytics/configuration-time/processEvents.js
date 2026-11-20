@@ -1,17 +1,14 @@
-"use strict";
+'use strict';
 
 var analyticsConstants = require('*/cartridge/adyen/analytics/constants');
-var {
-  clearEvents,
-  processEvents
-} = require('*/cartridge/adyen/analytics/analyticsUtils');
+var { clearEvents, processEvents } = require('*/cartridge/adyen/analytics/analyticsUtils');
 function processConfigurationTime() {
-  processEvents(analyticsConstants.configurationTimeEventObjectId);
+    processEvents(analyticsConstants.configurationTimeEventObjectId);
 }
 function clearConfigurationTime() {
-  clearEvents(analyticsConstants.configurationTimeEventObjectId);
+    clearEvents(analyticsConstants.configurationTimeEventObjectId);
 }
 module.exports = {
-  processConfigurationTime,
-  clearConfigurationTime
+    processConfigurationTime,
+    clearConfigurationTime
 };

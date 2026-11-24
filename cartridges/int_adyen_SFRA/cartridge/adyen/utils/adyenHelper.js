@@ -24,6 +24,19 @@ var AdyenLogs = require('*/cartridge/adyen/logs/adyenCustomLogs');
 var { sanitizeRequest } = require('*/cartridge/adyen/utils/checkoutRequestSanitizer');
 var { AdyenError } = require('*/cartridge/adyen/logs/adyenError');
 var COHelpers = require('*/cartridge/scripts/checkout/checkoutHelpers');
+function parseErrorResponse(errorText) {
+    try {
+        return JSON.parse(errorText);
+    } catch (e) {
+        return null;
+    }
+}
+function createServiceError(message, errorText) {
+    var serviceError = new AdyenError(message);
+    serviceError.isServiceError = true;
+    serviceError.adyenErrorResponse = errorText ? parseErrorResponse(errorText) : null;
+    return serviceError;
+}
 
 /* eslint no-var: off */
 var adyenHelperObj = {
@@ -746,7 +759,7 @@ var adyenHelperObj = {
         }
         var service = this.getService(serviceType);
         if (service === null) {
-            throw new AdyenError(`Could not create ${serviceType} service object`);
+            throw createServiceError(`Could not create ${serviceType} service object`);
         }
         var serviceApiVersion = service.getURL().replace('[CHECKOUT_API_VERSION]', constants.CHECKOUT_API_VERSION);
         service.setURL(serviceApiVersion);
@@ -769,13 +782,14 @@ var adyenHelperObj = {
             callResult = service.call(requestBody);
         }
         if (!callResult.isOk()) {
-            throw new AdyenError(
-                `${serviceType} service call error code${callResult.getError().toString()} Error => ResponseStatus: ${callResult.getStatus()} | ResponseErrorText: ${callResult.getErrorMessage()} | ResponseText: ${callResult.getMsg()}`
+            throw createServiceError(
+                `${serviceType} service call error code${callResult.getError().toString()} Error => ResponseStatus: ${callResult.getStatus()} | ResponseErrorText: ${callResult.getErrorMessage()} | ResponseText: ${callResult.getMsg()}`,
+                callResult.getErrorMessage()
             );
         }
         var resultObject = callResult.object;
         if (!resultObject || !resultObject.getText()) {
-            throw new AdyenError(`No correct response from ${serviceType} service call`);
+            throw createServiceError(`No correct response from ${serviceType} service call`);
         }
         return JSON.parse(resultObject.getText());
     },

@@ -15,6 +15,7 @@ var BasketMgr = require('dw/order/BasketMgr');
 var PaymentMgr = require('dw/order/PaymentMgr');
 var Transaction = require('dw/system/Transaction');
 var OrderMgr = require('dw/order/OrderMgr');
+var Order = require('dw/order/Order');
 var URLUtils = require('dw/web/URLUtils');
 var Money = require('dw/value/Money');
 var adyenCheckout = require('*/cartridge/adyen/scripts/payments/adyenCheckout');
@@ -96,9 +97,13 @@ function handleGiftCardPayment(currentBasket, order) {
 function handleCancellation(res, next, reqDataObj) {
     AdyenLogs.info_log(`Shopper cancelled paymentFromComponent transaction for order ${reqDataObj.merchantReference}`);
     var order = OrderMgr.getOrder(reqDataObj.merchantReference, reqDataObj.orderToken);
-    failOrder(order);
+    // The order is already failed when the basket was restored from another tab
+    if (((order || {}).status || {}).value === Order.ORDER_STATUS_CREATED) {
+        failOrder(order);
+    }
     var currentBasket = BasketMgr.getCurrentBasket();
-    var giftCardsAdded = currentBasket.custom && currentBasket.custom.adyenGiftCards ? JSON.parse(currentBasket.custom.adyenGiftCards) : null;
+    var giftCardsAdded =
+        currentBasket && currentBasket.custom && currentBasket.custom.adyenGiftCards ? JSON.parse(currentBasket.custom.adyenGiftCards) : null;
     if (giftCardsAdded) {
         cancelPartialPaymentOrderHelper(currentBasket);
     }
@@ -133,6 +138,19 @@ function handleKlarnaInlinePayment(result, reqDataObj) {
     }
 }
 
+// Lets Checkout-Begin restore the basket if the shopper navigates
+// back from the PayPal popup that iOS Safari opens as a new tab.
+// Limited to PayPal: other component methods (QR codes, MB WAY) keep the order
+// CREATED while the shopper is still paying, so restoring would fail it.
+// Express PDP uses a temporary basket, so there is nothing to restore.
+function cacheOrderForBasketRestore(req, order, reqDataObj, isExpressPdp) {
+    if (isExpressPdp || (reqDataObj.paymentMethod || {}).type !== constants.PAYMENTMETHODS.PAYPAL) {
+        return;
+    }
+    req.session.privacyCache.set('currentOrderNumber', order.orderNo);
+    req.session.privacyCache.set('currentOrderToken', order.orderToken);
+}
+
 /**
  * Make a payment from inside a component, skipping the summary page. (paypal, QRcodes, MBWay)
  */
@@ -165,6 +183,7 @@ function paymentFromComponent(req, res, next) {
         handleExpressPayment(reqDataObj, currentBasket);
         var order = AdyenHelper.createOrder(currentBasket);
         session.privacy.orderNo = order.orderNo;
+        cacheOrderForBasketRestore(req, order, reqDataObj, isExpressPdp);
         var result;
         Transaction.wrap(() => {
             result = adyenCheckout.createPaymentRequest({
